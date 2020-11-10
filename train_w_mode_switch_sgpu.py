@@ -70,7 +70,7 @@ def get_arguments():
     parser.add_argument('--rnn_type', choices=['LSTM', 'GRU'], required=True)
     parser.add_argument('--max_checkpoints',  type=int, default=MAX_TO_KEEP)
     parser.add_argument('--saved_path',  type=str, default=None)
-    parser.add_argument('--mode_choice', choices=['bar_note', 'nosamplernn','note'], type = str,default='bar_note')
+    parser.add_argument('--mode_choice', choices=['bar_note', 'nosamplernn','note',"ad_rm2t", "ad_rm3t"], type = str,default='bar_note')
     parser.add_argument('--if_cond',type=str, choices=['cond','no_cond'])
     parser.add_argument('--piano_dim',type=int, default = PIANO_DIM)
     parser.add_argument('--note_channel',type=int, default = NOTE_CHANNEL)

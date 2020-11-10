@@ -125,7 +125,7 @@ def choose_from_distribution(preds, temperature=1.0):
     #np.save("debug.npy",preds)
     return_array[:,np.argmax(probas)] = 1
     return return_array
-def decode_event_slice(event_slice, net, ignore_bar_event = False):
+def decode_event_slice(event_slice, net, ignore_bar_event = True):
     CHORD_CHANNELS_REST = net.chord_channel
     RHYTHMS_CHANNELS = net.rhythm_channel
 
