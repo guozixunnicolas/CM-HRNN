@@ -56,7 +56,7 @@ class AudioReader(object):
         for mid_file in mid_files:
             mid = np.load(mid_file)
             npy_lst.append(mid)
-            print(mid_file, mid.shape)
+            #print(mid_file, mid.shape)
         print("encoding........FINISHED!")
         return npy_lst
 

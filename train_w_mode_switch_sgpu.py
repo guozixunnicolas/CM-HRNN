@@ -4,7 +4,7 @@ from datetime import datetime
 import json
 import os
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"]="3"
+os.environ["CUDA_VISIBLE_DEVICES"]="2"
 import sys
 import time
 from datetime import datetime
@@ -188,6 +188,10 @@ def main():
         elif args.mode_choice=="note":
             network_input_plder= tf.placeholder(tf.float32,shape =(None, args.seq_len, args.piano_dim), name = "input_batch_rnn")
             network_output_plder = tf.placeholder(tf.float32,shape =(None, args.seq_len-args.frame_size, args.piano_dim-args.chord_channel), name = "output_batch_rnn")
+        elif args.mode_choice=="ad_rm2t":
+            network_input_plder= tf.placeholder(tf.float32,shape =(None, args.seq_len, args.piano_dim), name = "input_batch_rnn")
+            rm_time_plder = tf.placeholder(tf.float32,shape =(None, args.seq_len-args.frame_size, args.rhythm_channel), name = "rm_tm_rnn")
+            network_output_plder = tf.placeholder(tf.float32,shape =(None, args.seq_len-args.frame_size, args.piano_dim-args.chord_channel), name = "output_batch_rnn")
     else:
         if args.mode_choice=="nosamplernn":
             network_input_plder= tf.placeholder(tf.float32,shape =(None, args.frame_size, args.piano_dim-args.chord_channel), name = "input_batch_rnn")
@@ -200,20 +204,34 @@ def main():
         elif args.mode_choice=="note":
             network_input_plder= tf.placeholder(tf.float32,shape =(None, args.seq_len, args.piano_dim-args.chord_channel), name = "input_batch_rnn")
             network_output_plder = tf.placeholder(tf.float32,shape =(None, args.seq_len-args.frame_size, args.piano_dim-args.chord_channel), name = "output_batch_rnn")
+        elif args.mode_choice=="ad_rm2t":
+            network_input_plder= tf.placeholder(tf.float32,shape =(None, args.seq_len, args.piano_dim-args.chord_channel), name = "input_batch_rnn")
+            rm_time_plder = tf.placeholder(tf.float32,shape =(None, args.seq_len-args.frame_size, args.rhythm_channel), name = "rm_tm_rnn")
+            network_output_plder = tf.placeholder(tf.float32,shape =(None, args.seq_len-args.frame_size, args.piano_dim-args.chord_channel), name = "output_batch_rnn")
 
     ##build graph##
     with tf.variable_scope(tf.get_variable_scope(),reuse = tf.AUTO_REUSE):
         with tf.name_scope('TOWER_0') as scope:
-            print("Creating model On Gpu:0s.")
-            (   gt,
-                pd,
-                loss
-            )=net.loss_SampleRnn(
-                network_input_plder,
-                network_output_plder,
-                l2_regularization_strength=args.l2_regularization_strength  # noqa: E501
-            )
-        
+
+            if args.mode_choice!="ad_rm2t":
+                (   gt,
+                    pd,
+                    loss
+                )=net.loss_SampleRnn(
+                    X = network_input_plder,
+                    y = network_output_plder,
+                    l2_regularization_strength=args.l2_regularization_strength  # noqa: E501
+                )
+            else:
+                (   gt,
+                    pd,
+                    loss
+                )=net.loss_SampleRnn(
+                    X = network_input_plder,
+                    y = network_output_plder,
+                    rm_time= rm_time_plder,
+                    l2_regularization_strength=args.l2_regularization_strength  # noqa: E501
+                )                
             tf.get_variable_scope().reuse_variables()
             trainable = tf.trainable_variables()
             gradients_vars = optim.compute_gradients(
@@ -277,56 +295,94 @@ def main():
     reader.start_threads(sess)
     ####forward prop and gradient descent####
     try:
-        X_val, y_val = reader.get_validation_data()
-        print("fetched val data sucessfully", X_val.shape, y_val.shape)
-        for step in range(saved_global_step + 1, args.num_steps):
-            start_time = time.time()
-            X, y = sess.run(audio_batch) #[ [(batch,seq,dim)]     [(batch,seq,dim)] ]
-            ## define output list ##
-            loss_sum_train = 0
-            loss_sum_test = 0
-            idx_begin = 0
+        if args.mode_choice!="ad_rm2t":
+            X_val, y_val = reader.get_validation_data()
+            print("fetched val data sucessfully", X_val.shape, y_val.shape)
+            for step in range(saved_global_step + 1, args.num_steps):
+                start_time = time.time()
+                X, y = sess.run(audio_batch) #[ [(batch,seq,dim)]     [(batch,seq,dim)] ]
+                ## define output list ##
+                loss_sum_train = 0
+                loss_sum_test = 0
+                idx_begin = 0
 
-            outp_list_train = [gt,
-                         pd,
-                         summaries,
-                         loss,
-                         apply_gradient_op]
-            outp_list_test = [gt,
-                         pd,
-                         summaries,
-                         loss]
-            ## define input dict (placeholder: input) ##
+                outp_list_train = [gt,pd, summaries, loss, apply_gradient_op]
+                outp_list_test = [gt,pd,summaries, loss]
+                ## define input dict (placeholder: input) ##
 
-            inp_dict_train = {}
-            inp_dict_test = {}
+                inp_dict_train = {}
+                inp_dict_test = {}
 
-            ## you can change here! if you want a really long seq with minimal padding
-            inp_dict_train[network_input_plder] = X
-            inp_dict_train[network_output_plder] = y
+                ## you can change here! if you want a really long seq with minimal padding
+                inp_dict_train[network_input_plder] = X
+                inp_dict_train[network_output_plder] = y
 
-            inp_dict_test[network_input_plder] = X_val
-            inp_dict_test[network_output_plder] = y_val
-            ## run train op ##
-            ground_truth_train, prediction_train, summary_train, loss_train, _ = \
-                sess.run(outp_list_train, feed_dict=inp_dict_train) #inp_dict(audio_pld, condition_pld, train_big, train_state)
-            ## run test op ##
-            if step % 500 == 0:
-                ground_truth_test, prediction_test, summary_test, loss_test = \
-                    sess.run(outp_list_test, feed_dict=inp_dict_test) #inp_dict(audio_pld, condition_pld, train_big, train_state)
-                writer2.add_summary(summary_test, step)
-            #if step % 300 == 0:
-                #save_gt_pd(ground_truth,prediction,step,i,logdir)
-            writer.add_summary(summary_train, step)
-            
-            duration = time.time() - start_time
-            print('step {:d} - train_loss = {:.3f}, test_loss = {:.3f}, ({:.3f} sec/step)'
-                  .format(step, loss_train, loss_test, duration))
-            
-            if step % args.checkpoint_every == 0:
-                save(saver, sess, logdir, step)
-                last_saved_step = step
+                inp_dict_test[network_input_plder] = X_val
+                inp_dict_test[network_output_plder] = y_val
+                ## run train op ##
+                ground_truth_train, prediction_train, summary_train, loss_train, _ = \
+                    sess.run(outp_list_train, feed_dict=inp_dict_train) #inp_dict(audio_pld, condition_pld, train_big, train_state)
+                ## run test op ##
+                if step % 500 == 0:
+                    ground_truth_test, prediction_test, summary_test, loss_test = \
+                        sess.run(outp_list_test, feed_dict=inp_dict_test) #inp_dict(audio_pld, condition_pld, train_big, train_state)
+                    writer2.add_summary(summary_test, step)
+                #if step % 300 == 0:
+                    #save_gt_pd(ground_truth,prediction,step,i,logdir)
+                writer.add_summary(summary_train, step)
+                
+                duration = time.time() - start_time
+                print('step {:d} - train_loss = {:.3f}, test_loss = {:.3f}, ({:.3f} sec/step)'
+                    .format(step, loss_train, loss_test, duration))
+                
+                if step % args.checkpoint_every == 0:
+                    save(saver, sess, logdir, step)
+                    last_saved_step = step
+        else:
+            X_val, y_val, remaining_time_val = reader.get_validation_data()
+            print("fetched val data sucessfully", X_val.shape, y_val.shape,remaining_time_val.shape)
+            for step in range(saved_global_step + 1, args.num_steps):
+                start_time = time.time()
+                X, y, remaining_time = sess.run(audio_batch) #[ [(batch,seq,dim)]     [(batch,seq,dim)] ]
+                ## define output list ##
+                loss_sum_train = 0
+                loss_sum_test = 0
+                idx_begin = 0
 
+                outp_list_train = [gt,pd, summaries, loss, apply_gradient_op]
+                outp_list_test = [gt,pd,summaries, loss]
+                ## define input dict (placeholder: input) ##
+
+                inp_dict_train = {}
+                inp_dict_test = {}
+
+                ## you can change here! if you want a really long seq with minimal padding
+                inp_dict_train[network_input_plder] = X
+                inp_dict_train[network_output_plder] = y
+                inp_dict_train[rm_time_plder] = remaining_time 
+
+                inp_dict_test[network_input_plder] = X_val
+                inp_dict_test[network_output_plder] = y_val
+                inp_dict_test[rm_time_plder] = remaining_time_val 
+                ## run train op ##
+                ground_truth_train, prediction_train, summary_train, loss_train, _ = \
+                    sess.run(outp_list_train, feed_dict=inp_dict_train) #inp_dict(audio_pld, condition_pld, train_big, train_state)
+                ## run test op ##
+                if step % 500 == 0:
+                    ground_truth_test, prediction_test, summary_test, loss_test = \
+                        sess.run(outp_list_test, feed_dict=inp_dict_test) #inp_dict(audio_pld, condition_pld, train_big, train_state)
+                    writer2.add_summary(summary_test, step)
+                #if step % 300 == 0:
+                    #save_gt_pd(ground_truth,prediction,step,i,logdir)
+                writer.add_summary(summary_train, step)
+                
+                duration = time.time() - start_time
+                print('step {:d} - train_loss = {:.3f}, test_loss = {:.3f}, ({:.3f} sec/step)'
+                    .format(step, loss_train, loss_test, duration))
+                
+                if step % args.checkpoint_every == 0:
+                    save(saver, sess, logdir, step)
+                    last_saved_step = step
     except KeyboardInterrupt:
             # Introduce a line break after ^C is displayed so save message
             # is on its own line.

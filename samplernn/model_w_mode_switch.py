@@ -131,7 +131,7 @@ class SampleRnnModel_w_mode_switch(object):
             return frame_outputs, frame_last_state                
         
 
-    def sample_level(self, sample_input_sequences, frame_output = None):
+    def sample_level(self, sample_input_sequences, frame_output = None, rm_time=None):
         
         sample_filter_shape = [self.frame_size, sample_input_sequences.shape[-1], self.dim]
         sample_filter = tf.get_variable(
@@ -146,6 +146,8 @@ class SampleRnnModel_w_mode_switch(object):
                             name="sample_conv") #(batch, seqlen-framesize, dim)
         if frame_output is not None:
             logits = mlp_out+frame_output
+        if rm_time is not None:
+            logits = tf.concat([logits, rm_time],axis = -1)
 
         
 
@@ -220,9 +222,20 @@ class SampleRnnModel_w_mode_switch(object):
         sample_outputs_logits = tf.nn.relu(sample_outputs_logits)# (iter*batch, note_channel+rhythm)
         return sample_outputs_logits
 
+    def _create_network_ad_rm2t(self, one_t_input, rm_tm):
+        sample_input = one_t_input[:,:-1,:] # batch, seq-1, piano_dim
+ 
+        frame_input = one_t_input[:, :-self.frame_size,:] #(batch, seq-frame_size, piano_dim)
 
+        remaining_time_input = rm_tm #(batch, seq-frame_size, piano_dim)
 
-    def loss_SampleRnn(self, X,y, l2_regularization_strength=None, name='sample'):
+        ##frame_level##
+        frame_outputs , final_frame_state = self.frame_level(frame_input)
+        ##sample_level## 
+        sample_logits= self.sample_level(sample_input, frame_output = frame_outputs, rm_time = remaining_time_input)
+        return sample_logits        
+
+    def loss_SampleRnn(self, X,y, rm_time = None,l2_regularization_strength=None, name='sample'):
         """ nosamplernn: X: (batch, frame_size, dim), Y:(batch, 1, dim)
             barnote: X(batch, seq_len, dim), Y:(batch, seq_len-frame-big_frame, dim)
             note: X(batch, seq_len, dim), Y:(batch, seq_len-frame, dim)
@@ -231,6 +244,7 @@ class SampleRnnModel_w_mode_switch(object):
         """
         self.X = X
         self.y = y
+        self.rm_time = rm_time
         with tf.name_scope(name):
             if self.mode_choice =="bar_note":
                 pred_logits = self._create_network_two_layer_SampleRnn(two_t_input = self.X) #(batch* seq_len-frame-big_frame, self.note + self.rhythm)
@@ -242,8 +256,9 @@ class SampleRnnModel_w_mode_switch(object):
             elif self.mode_choice=="nosamplernn":
                 pred_logits = self._create_network_noSampleRnn( baseline_input= self.X) #(batch, self.note + self.rhythm)
                 pd = tf.expand_dims(pred_logits, axis = 1) #(batch, 1, self.note + self.rhythm)
-
-
+            elif self.mode_choice=="ad_rm2t":
+                pred_logits= self._create_network_ad_rm2t(one_t_input = self.X, rm_tm = self.rm_time) #(batch* seq_len-frame, self.note + self.rhythm)
+                pd = pred_logits                
             gt_bar = self.y[:, :, :self.bar_channel]
             gt_sustain = self.y[:, :, self.bar_channel : self.bar_channel+self.rhythm_channel]
             gt_note = self.y[:,:, self.bar_channel+self.rhythm_channel:]
