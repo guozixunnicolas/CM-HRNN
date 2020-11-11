@@ -339,7 +339,7 @@ def main():
                     save(saver, sess, logdir, step)
                     last_saved_step = step
         else:
-            X_val, y_val, remaining_time_val = reader.get_validation_data()
+            X_val, y_val, remaining_time_val = reader.get_adrm_validation_data()
             print("fetched val data sucessfully", X_val.shape, y_val.shape,remaining_time_val.shape)
             for step in range(saved_global_step + 1, args.num_steps):
                 start_time = time.time()

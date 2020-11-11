@@ -162,7 +162,6 @@ class AudioReader(object):
             ground_truth_tmp = []
             rm_tm_tmp = []
             while len(audio) >= self.seq_len:
-
                 #make sure X starts with a bar event
                 X = audio[:self.seq_len, :]
 
@@ -188,19 +187,66 @@ class AudioReader(object):
             else:
                 return X_y_lst            
     
+    def prepare_adrm_data(self,audio, all_xy_lst):
+        if not self.if_cond:
+            audio = np.delete(audio,np.s_[self.bar_channel:self.bar_channel+self.chord_channel],axis=1)
+        if self.mode_choice=="ad_rm2t":
+            #make sure data starts with a bar event
+            for i in range(len(audio)):
+                if np.argmax(audio[i][:self.bar_channel])==1:
+                    #print("is bar",audio[i][:self.bar_channel])
+                    trim_index = i
+                    break
+            audio = audio[trim_index:]
+
+            seq_list_tmp = [] 
+            ground_truth_tmp = []
+            rm_tm_tmp = []
+
+            while len(audio) >= self.seq_len:
+                #make sure X starts with a bar event
+                X = audio[:self.seq_len, :]
+
+                #y is okay, no pre-process needed
+                y = X[self.frame_size:,:]
+                if self.if_cond:
+                    gt = np.delete(y,np.s_[self.bar_channel:self.bar_channel+self.chord_channel],axis=1)
+                else:
+                    gt = y
+                #process remaining time lst
+                
+                rm_time_output = self.find_remaining_time(X, prev_len = self.frame_size) #(len-framesize, rhythm_channel)
+                seq_list_tmp.append(X)  
+                ground_truth_tmp.append(gt)
+                rm_tm_tmp.append(rm_time_output)
+                audio = audio[self.seq_len:, :]
+            X_y_lst = zip(seq_list_tmp, ground_truth_tmp, rm_tm_tmp) #[(X,y,z), (X,y,z) ]
+            all_xy_lst.extend(X_y_lst)
+        return all_xy_lst
     def thread_main2(self, sess):
         stop = False
         mid_files = glob.glob(self.audio_dir+'/*.npy')
-        npy_list = self.encode_npy(mid_files)
+        #npy_list = self.encode_npy(mid_files)
+        npy_lst = [(mid_file,np.load(mid_file)) for mid_file in mid_files]
+
+        all_xyz_lst = []
+        for npy_name, npy_file in npy_lst:
+            all_xyz_lst = self.prepare_adrm_data(npy_file, all_xyz_lst)
         while not stop:
-            for i,npy_file in enumerate(npy_list):
-                audio = npy_file
-                if self.coord.should_stop():
-                    stop = True
-                    break
-                
-                self.prepare_each_data(audio, sess, if_train = True)
-                
+            if self.mode_choice!="ad_rm2t": 
+                for _,npy_file in npy_list:
+                    audio = npy_file
+                    if self.coord.should_stop():
+                        stop = True
+                        break
+                    self.prepare_each_data(audio, sess, if_train = True)
+            else:
+
+                for xyz in all_xyz_lst:
+                    if self.coord.should_stop():
+                        stop = True
+                        break
+                    sess.run(self.enqueue,feed_dict={self.X: xyz[0], self.Y: xyz[1], self.rm_tm: xyz[2]})  
 
 
     def start_threads(self, sess, n_threads=1):
@@ -229,13 +275,26 @@ class AudioReader(object):
             z = np.stack(z_lst, axis = 0)
             return X, y, z        
         
+    def get_adrm_validation_data(self):
+        val_files = glob.glob(self.validation_dir+'/*.npy')
+
+        npy_lst = [(mid_file,np.load(mid_file)) for mid_file in val_files]
+
+        all_xyz_lst = []
+        for npy_name, npy_file in npy_lst:
+            all_xyz_lst = self.prepare_adrm_data(npy_file, all_xyz_lst)
 
 
+        X_lst, y_lst,z_lst = zip(*all_xyz_lst)
+        X = np.stack(X_lst, axis = 0)
+        y = np.stack(y_lst, axis = 0)
+        z = np.stack(z_lst, axis = 0)
+        return X, y, z  
 if __name__=='__main__':
 
     parser = argparse.ArgumentParser(description='SampleRnn example network')
-    parser.add_argument('--data_dir', type=str,default="../data_inC_bar_pad/test_folder")
-    parser.add_argument('--val_data_dir',type=str,default = "../data_inC_bar_pad/test_folder")                  
+    parser.add_argument('--data_dir', type=str,default="../data_inC_bar_pad/train/Electronic")
+    parser.add_argument('--val_data_dir',type=str,default = "../data_inC_bar_pad/val/Electronic")                  
 
     parser.add_argument('--seq_len',          type=int, default = 64)
     parser.add_argument('--big_frame_size',   type=int, default = 32)
@@ -272,7 +331,9 @@ if __name__=='__main__':
         print("asdasdsa", X.shape,y.shape)
     else:
         X_train, y_train,rm_time = sess.run(audio_batch)
-        X, y,rm_time_val = reader.get_validation_data()
+        X, y,rm_time_val = reader.get_adrm_validation_data()
+        print(X_train.shape, y_train.shape,rm_time.shape)
+        print(X.shape, y.shape,rm_time_val.shape)
         np.save("X.npy",X_train)
         np.save("y.npy",y_train)
         np.save("rm.npy",rm_time)      
