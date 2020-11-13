@@ -32,7 +32,9 @@ class SampleRnnModel_w_mode_switch(object):
         elif args.if_cond=="no_cond":
             self.if_cond = False
             print("model setting: unconditional")
-        
+        print(self.batch_size, self.big_frame_size,self.frame_size,self.rnn_type,
+              self.dim,self.piano_dim,self.n_rnn,self.seq_len,self.mode_choice, 
+              self.note_channel,self.rhythm_channel,self.chord_channel,self.bar_channel)
         def single_cell(if_attention = False, atten_len = None):
             if self.rnn_type =="GRU":
                 cell = tf.contrib.rnn.GRUCell(self.dim)
@@ -108,7 +110,7 @@ class SampleRnnModel_w_mode_switch(object):
         frame_input_chunks = tf.reshape(frame_input,[-1, #batch
                                                     int(frame_input.shape[1]) // self.frame_size, #no_of_chunks 
                                                     self.frame_size*int(frame_input.shape[-1])]) #frame_size*merged_dim
-
+        print("input chunk shape",frame_input_chunks)
         with tf.variable_scope("FRAME_RNN"):
             
             """if bigframe_output is not None:
@@ -117,8 +119,10 @@ class SampleRnnModel_w_mode_switch(object):
             
             
             if frame_state is not None: #during generation
+                print("initial shape", frame_state)
+                print("frame input chunks shape",frame_input_chunks )
                 frame_outputs_all_stps, frame_last_state = tf.nn.dynamic_rnn(self.frame_cell, frame_input_chunks,initial_state = frame_state, dtype=tf.float32)
-
+                print("out shape!",frame_outputs_all_stps, frame_last_state)
             else: #during training
                 frame_outputs_all_stps, frame_last_state = tf.nn.dynamic_rnn(self.frame_cell, frame_input_chunks, dtype=tf.float32)
             if bigframe_output is not None:
@@ -226,9 +230,8 @@ class SampleRnnModel_w_mode_switch(object):
         sample_input = one_t_input[:,:-1,:] # batch, seq-1, piano_dim
  
         frame_input = one_t_input[:, :-self.frame_size,:] #(batch, seq-frame_size, piano_dim)
-
         remaining_time_input = rm_tm #(batch, seq-frame_size, piano_dim)
-
+        print("fram input dim",frame_input)
         ##frame_level##
         frame_outputs , final_frame_state = self.frame_level(frame_input)
         ##sample_level## 
