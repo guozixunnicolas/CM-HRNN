@@ -29,7 +29,7 @@ class AudioReader(object):
         self.X = tf.placeholder(dtype=tf.float32, shape=None)
         self.Y = tf.placeholder(dtype=tf.float32, shape=None)
         self.rm_tm = tf.placeholder(dtype=tf.float32, shape=None)
-        if self.mode_choice!="ad_rm2t":
+        if self.mode_choice=="bar_note" or self.mode_choice=="note" or self.mode_choice=="nosamplernn":
             if self.if_cond:
                 self.queue = tf.PaddingFIFOQueue(
                         capacity = queue_size, dtypes=[tf.float32, tf.float32], shapes=[(None, self.piano_dim), (None, self.piano_dim-self.chord_channel)])
@@ -38,7 +38,7 @@ class AudioReader(object):
                     capacity = queue_size, dtypes=[tf.float32, tf.float32], shapes=[(None, self.piano_dim-self.chord_channel), (None, self.piano_dim-self.chord_channel)])  
             
             self.enqueue = self.queue.enqueue([self.X, self.Y])
-        else:
+        elif self.mode_choice=="ad_rm2t" or self.mode_choice=="ad_rm3t":
             if self.if_cond:
                 self.queue = tf.PaddingFIFOQueue(
                         capacity = queue_size, dtypes=[tf.float32, tf.float32, tf.float32], shapes=[(None, self.piano_dim), (None, self.piano_dim-self.chord_channel), (None, self.rhythm_channel)])
@@ -187,10 +187,37 @@ class AudioReader(object):
             else:
                 return X_y_lst            
     
-    def prepare_adrm_data(self,audio, all_xy_lst):
+    def prepare_all_data(self,audio, all_xy_lst):
         if not self.if_cond:
             audio = np.delete(audio,np.s_[self.bar_channel:self.bar_channel+self.chord_channel],axis=1)
         if self.mode_choice=="ad_rm2t":
+            #make sure data starts with a bar event
+            for i in range(len(audio)):
+                if np.argmax(audio[i][:self.bar_channel])==1:
+                    trim_index = i
+                    break
+            audio = audio[trim_index:]
+
+            seq_list_tmp = [] 
+            ground_truth_tmp = []
+            rm_tm_tmp = []
+
+            while len(audio) >= self.seq_len:
+                X = audio[:self.seq_len, :]
+                y = X[self.frame_size:,:]
+                if self.if_cond:
+                    gt = np.delete(y,np.s_[self.bar_channel:self.bar_channel+self.chord_channel],axis=1)
+                else:
+                    gt = y
+                #process remaining time lst
+                rm_time_output = self.find_remaining_time(X, prev_len = self.frame_size) #(len-framesize, rhythm_channel)
+                seq_list_tmp.append(X)  
+                ground_truth_tmp.append(gt)
+                rm_tm_tmp.append(rm_time_output)
+                audio = audio[self.seq_len:, :]
+            X_y_lst = zip(seq_list_tmp, ground_truth_tmp, rm_tm_tmp) #[(X,y,z), (X,y,z) ]
+            all_xy_lst.extend(X_y_lst)
+        elif self.mode_choice=="ad_rm3t":
             #make sure data starts with a bar event
             for i in range(len(audio)):
                 if np.argmax(audio[i][:self.bar_channel])==1:
@@ -206,41 +233,85 @@ class AudioReader(object):
             while len(audio) >= self.seq_len:
                 #make sure X starts with a bar event
                 X = audio[:self.seq_len, :]
-
                 #y is okay, no pre-process needed
-                y = X[self.frame_size:,:]
+                y = X[self.big_frame_size:,:]
                 if self.if_cond:
                     gt = np.delete(y,np.s_[self.bar_channel:self.bar_channel+self.chord_channel],axis=1)
                 else:
                     gt = y
                 #process remaining time lst
-                
-                rm_time_output = self.find_remaining_time(X, prev_len = self.frame_size) #(len-framesize, rhythm_channel)
+                rm_time_output = self.find_remaining_time(X, prev_len = self.big_frame_size) #(len-framesize, rhythm_channel)
                 seq_list_tmp.append(X)  
                 ground_truth_tmp.append(gt)
                 rm_tm_tmp.append(rm_time_output)
                 audio = audio[self.seq_len:, :]
             X_y_lst = zip(seq_list_tmp, ground_truth_tmp, rm_tm_tmp) #[(X,y,z), (X,y,z) ]
             all_xy_lst.extend(X_y_lst)
+        elif self.mode_choice=="bar_note":
+            seq_list_tmp = [] 
+            ground_truth_tmp = []
+            while len(audio) >= self.seq_len:
+                X = audio[:self.seq_len, :]
+                #y = X[self.big_frame_size+self.frame_size:,:]
+                y = X[self.big_frame_size:,:]
+                if self.if_cond:
+                    gt = np.delete(y,np.s_[self.bar_channel:self.bar_channel+self.chord_channel],axis=1)
+                else:
+                    gt = y
+                seq_list_tmp.append(X)  
+                ground_truth_tmp.append(gt)
+                audio = audio[self.seq_len:, :]
+            X_y_lst = zip(seq_list_tmp, ground_truth_tmp)
+            all_xy_lst.extend(X_y_lst)
+        elif self.mode_choice=="note":
+            seq_list_tmp = [] 
+            ground_truth_tmp = []
+            while len(audio) >= self.seq_len:
+                X = audio[:self.seq_len, :]
+                y = X[self.frame_size:,:]
+                if self.if_cond:
+                    gt = np.delete(y,np.s_[self.bar_channel:self.bar_channel+self.chord_channel],axis=1)
+                else:
+                    gt = y
+                seq_list_tmp.append(X)  
+                ground_truth_tmp.append(gt)
+                audio = audio[self.seq_len:, :]
+            X_y_lst = zip(seq_list_tmp, ground_truth_tmp) #[(X,y), (X,y) ]
+            all_xy_lst.extend(X_y_lst)
+        elif self.mode_choice=="nosamplernn":
+            num_iter = audio.shape[0]-self.frame_size 
+            seq_list_tmp = [] 
+            ground_truth_tmp = []
+            for i in range(num_iter):
+                seq = audio[ i:i+self.frame_size, :]
+                seq_list_tmp.append(seq)  
+                if self.if_cond:
+                    gt = np.delete([audio[ i+self.frame_size, :]],np.s_[self.bar_channel:self.bar_channel+self.chord_channel],axis=1)
+                else:
+                    gt = [audio[ i+self.frame_size, :]]
+                ground_truth_tmp.append(gt)
+            X_y_lst = zip(seq_list_tmp, ground_truth_tmp)
+            all_xy_lst.extend(X_y_lst)
         return all_xy_lst
     def thread_main2(self, sess):
         stop = False
         mid_files = glob.glob(self.audio_dir+'/*.npy')
-        #npy_list = self.encode_npy(mid_files)
-        npy_lst = [(mid_file,np.load(mid_file)) for mid_file in mid_files]
 
+        npy_lst = [(mid_file,np.load(mid_file)) for mid_file in mid_files]
         all_xyz_lst = []
+
         for npy_name, npy_file in npy_lst:
-            all_xyz_lst = self.prepare_adrm_data(npy_file, all_xyz_lst)
+            all_xyz_lst = self.prepare_all_data(npy_file, all_xyz_lst)
+        
         while not stop:
-            if self.mode_choice!="ad_rm2t": 
-                for _,npy_file in npy_list:
-                    audio = npy_file
+            if self.mode_choice=="bar_note" or self.mode_choice=="note" or self.mode_choice=="nosamplernn": 
+                for xy in all_xyz_lst:
                     if self.coord.should_stop():
                         stop = True
                         break
-                    self.prepare_each_data(audio, sess, if_train = True)
-            else:
+                    sess.run(self.enqueue,feed_dict={self.X: xy[0], self.Y: xy[1]})  
+
+            elif self.mode_choice=="ad_rm2t" or self.mode_choice=="ad_rm3t":
 
                 for xyz in all_xyz_lst:
                     if self.coord.should_stop():
@@ -255,52 +326,41 @@ class AudioReader(object):
             thread.daemon = True  # Thread will close when parent quits.
             thread.start()
             self.threads.append(thread)
-        return self.threads
-    def get_validation_data(self):
-        val_files = glob.glob(self.validation_dir+'/*.npy')
-        val_list = self.encode_npy(val_files) 
-        piece_lst = [] #[(x,y),(x, y), x(y)]
-        for val_data in val_list:      
-            X_y_lst = self.prepare_each_data(val_data, if_train = False) #[(x,y),(x, y), (x,y)]
-            piece_lst += X_y_lst
-        if self.mode_choice!="ad_rm2t":
-            X_lst, y_lst = zip(*piece_lst)
-            X = np.stack(X_lst, axis = 0)
-            y = np.stack(y_lst, axis = 0)
-            return X, y
-        else:
-            X_lst, y_lst,z_lst = zip(*piece_lst)
-            X = np.stack(X_lst, axis = 0)
-            y = np.stack(y_lst, axis = 0)
-            z = np.stack(z_lst, axis = 0)
-            return X, y, z        
+        return self.threads     
         
-    def get_adrm_validation_data(self):
+    def get_validation_data(self):
         val_files = glob.glob(self.validation_dir+'/*.npy')
 
         npy_lst = [(mid_file,np.load(mid_file)) for mid_file in val_files]
 
         all_xyz_lst = []
         for npy_name, npy_file in npy_lst:
-            all_xyz_lst = self.prepare_adrm_data(npy_file, all_xyz_lst)
+            all_xyz_lst = self.prepare_all_data(npy_file, all_xyz_lst)
 
 
-        X_lst, y_lst,z_lst = zip(*all_xyz_lst)
-        X = np.stack(X_lst, axis = 0)
-        y = np.stack(y_lst, axis = 0)
-        z = np.stack(z_lst, axis = 0)
-        return X, y, z  
+        if self.mode_choice=="bar_note" or self.mode_choice=="note" or self.mode_choice=="nosamplernn":
+            X_lst, y_lst = zip(*all_xyz_lst)
+            X = np.stack(X_lst, axis = 0)
+            y = np.stack(y_lst, axis = 0)
+            return X, y
+        elif self.mode_choice=="ad_rm2t" or self.mode_choice=="ad_rm3t":
+            X_lst, y_lst,z_lst = zip(*all_xyz_lst)
+            X = np.stack(X_lst, axis = 0)
+            y = np.stack(y_lst, axis = 0)
+            z = np.stack(z_lst, axis = 0)
+            return X, y, z        
+
 if __name__=='__main__':
 
     parser = argparse.ArgumentParser(description='SampleRnn example network')
     parser.add_argument('--data_dir', type=str,default="../data_inC_bar_pad/train/Electronic")
     parser.add_argument('--val_data_dir',type=str,default = "../data_inC_bar_pad/val/Electronic")                  
 
-    parser.add_argument('--seq_len',          type=int, default = 64)
+    parser.add_argument('--seq_len',          type=int, default = 128)
     parser.add_argument('--big_frame_size',   type=int, default = 32)
     parser.add_argument('--frame_size',       type=int, default = 16)
 
-    parser.add_argument('--mode_choice', choices=['bar_note', 'nosamplernn','note',"ad_rm2t", "ad_rm3t"], type = str,default="ad_rm2t")
+    parser.add_argument('--mode_choice', choices=['bar_note', 'nosamplernn','note',"ad_rm2t", "ad_rm3t"], type = str,default="ad_rm3t")
     parser.add_argument('--if_cond',type=str, choices=['cond','no_cond'], default = "cond")
     parser.add_argument('--note_channel',type=int, default = 130)
     parser.add_argument('--rhythm_channel',type=int, default = 16)
@@ -324,14 +384,14 @@ if __name__=='__main__':
     print('threads started')
     audio_batch = reader.dequeue(4)
     print('deququed')
-    if args.mode_choice!="ad_rm2t":
+    if args.mode_choice=="bar_note" or args.mode_choice=="note" or args.mode_choice=="nosamplernn":
         X_train, y_train = sess.run(audio_batch)
         X, y = reader.get_validation_data()
         print("dadasdas",X_train.shape, y_train.shape)
         print("asdasdsa", X.shape,y.shape)
     else:
         X_train, y_train,rm_time = sess.run(audio_batch)
-        X, y,rm_time_val = reader.get_adrm_validation_data()
+        X, y,rm_time_val = reader.get_validation_data()
         print(X_train.shape, y_train.shape,rm_time.shape)
         print(X.shape, y.shape,rm_time_val.shape)
         np.save("X.npy",X_train)

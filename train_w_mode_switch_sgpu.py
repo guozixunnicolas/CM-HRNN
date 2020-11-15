@@ -4,7 +4,7 @@ from datetime import datetime
 import json
 import os
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"]="2"
+os.environ["CUDA_VISIBLE_DEVICES"]="0"
 import sys
 import time
 from datetime import datetime
@@ -192,6 +192,11 @@ def main():
             network_input_plder= tf.placeholder(tf.float32,shape =(None, args.seq_len, args.piano_dim), name = "input_batch_rnn")
             rm_time_plder = tf.placeholder(tf.float32,shape =(None, args.seq_len-args.frame_size, args.rhythm_channel), name = "rm_tm_rnn")
             network_output_plder = tf.placeholder(tf.float32,shape =(None, args.seq_len-args.frame_size, args.piano_dim-args.chord_channel), name = "output_batch_rnn")
+        elif args.mode_choice=="ad_rm3t":
+            network_input_plder= tf.placeholder(tf.float32,shape =(None, args.seq_len, args.piano_dim), name = "input_batch_rnn")
+            rm_time_plder = tf.placeholder(tf.float32,shape =(None, args.seq_len-args.big_frame_size, args.rhythm_channel), name = "rm_tm_rnn")
+            network_output_plder = tf.placeholder(tf.float32,shape =(None, args.seq_len-args.big_frame_size, args.piano_dim-args.chord_channel), name = "output_batch_rnn")
+
     else:
         if args.mode_choice=="nosamplernn":
             network_input_plder= tf.placeholder(tf.float32,shape =(None, args.frame_size, args.piano_dim-args.chord_channel), name = "input_batch_rnn")
@@ -213,7 +218,7 @@ def main():
     with tf.variable_scope(tf.get_variable_scope(),reuse = tf.AUTO_REUSE):
         with tf.name_scope('TOWER_0') as scope:
 
-            if args.mode_choice!="ad_rm2t":
+            if args.mode_choice=="note" or args.mode_choice=="nosamplernn" or args.mode_choice=="bar_note":
                 (   gt,
                     pd,
                     loss
@@ -295,7 +300,7 @@ def main():
     reader.start_threads(sess)
     ####forward prop and gradient descent####
     try:
-        if args.mode_choice!="ad_rm2t":
+        if args.mode_choice=="bar_note" or args.mode_choice=="note" or args.mode_choice=="nosamplernn":
             X_val, y_val = reader.get_validation_data()
             print("fetched val data sucessfully", X_val.shape, y_val.shape)
             for step in range(saved_global_step + 1, args.num_steps):
@@ -339,15 +344,11 @@ def main():
                     save(saver, sess, logdir, step)
                     last_saved_step = step
         else:
-            X_val, y_val, remaining_time_val = reader.get_adrm_validation_data()
+            X_val, y_val, remaining_time_val = reader.get_validation_data()
             print("fetched val data sucessfully", X_val.shape, y_val.shape,remaining_time_val.shape)
             for step in range(saved_global_step + 1, args.num_steps):
                 start_time = time.time()
                 X, y, remaining_time = sess.run(audio_batch) #[ [(batch,seq,dim)]     [(batch,seq,dim)] ]
-                ## define output list ##
-                loss_sum_train = 0
-                loss_sum_test = 0
-                idx_begin = 0
 
                 outp_list_train = [gt,pd, summaries, loss, apply_gradient_op]
                 outp_list_test = [gt,pd,summaries, loss]
