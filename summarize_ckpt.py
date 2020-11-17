@@ -116,12 +116,30 @@ def get_feature(mid_file, long_short_threshold = 16):
 
 folders_2b_evaluated = ["test/generated_result/11_14_2020_13_23_50_Electronic_ad_rm3t/120000/32/0.6_0.4",
                        "test/generated_result/11_14_2020_13_23_50_Electronic_ad_rm3t/120000/32/0.6_0.2",
-                       "test/generated_result/11_14_2020_13_23_50_Electronic_ad_rm3t/120000/32/0.6_0.1"]
+                       "test/generated_result/11_14_2020_13_23_50_Electronic_ad_rm3t/120000/32/0.6_0.1",
+                       "test/generated_result/11_14_2020_13_22_48_Electronic_ad_rm3t/120000/16/0.6_0.4",
+                       "test/generated_result/11_14_2020_13_22_48_Electronic_ad_rm3t/120000/16/0.6_0.2",
+                       "test/generated_result/11_14_2020_13_22_48_Electronic_ad_rm3t/120000/16/0.6_0.1",
+                       "test/generated_result/11_14_2020_13_19_10_Electronic_ad_rm3t/120000/32/0.7_0.1",
+                       "test/generated_result/11_14_2020_13_19_10_Electronic_ad_rm3t/120000/32/0.7_0.2",
+                       "test/generated_result/11_14_2020_13_19_10_Electronic_ad_rm3t/120000/32/0.7_0.4",
+                       "test/generated_result/11_14_2020_13_19_10_Electronic_ad_rm3t/120000/32/0.6_0.1",
+                       "test/generated_result/11_14_2020_13_19_10_Electronic_ad_rm3t/120000/32/0.6_0.2",
+                       "test/generated_result/11_14_2020_13_19_10_Electronic_ad_rm3t/120000/32/0.6_0.4",
+                       "test/generated_result/11_14_2020_13_17_51_Electronic_ad_rm3t/120000/16/0.7_0.1",
+                       "test/generated_result/11_14_2020_13_17_51_Electronic_ad_rm3t/120000/16/0.7_0.2",
+                       "test/generated_result/11_14_2020_13_17_51_Electronic_ad_rm3t/120000/16/0.7_0.4",
+                       "test/generated_result/11_14_2020_13_17_51_Electronic_ad_rm3t/120000/16/0.6_0.1",
+                       "test/generated_result/11_14_2020_13_17_51_Electronic_ad_rm3t/120000/16/0.6_0.2",
+                       "test/generated_result/11_14_2020_13_17_51_Electronic_ad_rm3t/120000/16/0.6_0.4",
+                       "test/generated_result/11_10_2020_08_15_26_Electronic_ad_rm2t/120000/16/0.7_0.1",
+                       "test/generated_result/11_10_2020_08_15_26_Electronic_ad_rm2t/120000/16/0.7_0.3",
+                       "test/generated_result/11_10_2020_08_15_26_Electronic_ad_rm2t/120000/16/0.7_0.4"]
 merged_dict = []
 for folder in folders_2b_evaluated:
 
-    dictionary = get_empty_dict()
-
+    #dictionary = get_empty_dict()
+    dictionary = {}
     folder_name = folder.replace("/","_") #"test_generated_result_11_14_2020_13_23_50_Electronic_ad_rm3t_120000_32_0.6_0.1"
     json_name = "test/"+"_".join(folder_name.split("_")[3:])+".json"
     if os.path.isfile(json_name):
@@ -136,10 +154,10 @@ for folder in folders_2b_evaluated:
         ckpt = folder.split("/")[-3] #12000
         note_tmp = folder.split("/")[-1].split("_")[0] #0.6
         rhythm_tmp = folder.split("/")[-1].split("_")[1] #0.6
-        dictionary["logdir"].append(logdir)
-        dictionary["ckpt"].append(ckpt)
-        dictionary['note_tmp'].append(note_tmp)
-        dictionary["rhythm_tmp"].append(rhythm_tmp)
+        dictionary["logdir"]= logdir
+        dictionary["ckpt"]=ckpt
+        dictionary['note_tmp']=note_tmp
+        dictionary["rhythm_tmp"]=rhythm_tmp
 
         config_file_for_folder = "logdir/"+logdir+"/config.txt"
         with open(config_file_for_folder,"r") as f_op:
@@ -156,23 +174,23 @@ for folder in folders_2b_evaluated:
             alpha2 = lines[17].split(":")[-1][1:-1]
             rnn_type = lines[9].split(":")[-1][1:-1]
             dim = lines[10].split(":")[-1][1:-1]
-        dictionary["rnn_dim"].append(dim)
-        dictionary["mode_choice"].append(mode_choice_ckpt)
+        dictionary["rnn_dim"]=dim
+        dictionary["mode_choice"]=mode_choice_ckpt
         if mode_choice_ckpt =="bar_note" or mode_choice_ckpt =="ad_rm3t":    
-            dictionary["big_frame_size"].append(big_frame_size)
-            dictionary["frame_size"].append(frame_size)
+            dictionary["big_frame_size"]=big_frame_size
+            dictionary["frame_size"]=frame_size
         else:
-            dictionary["big_frame_size"].append("NA")
-            dictionary["frame_size"].append(frame_size)
-        dictionary["if_cond"].append(if_cond_ckpt)  
-        dictionary["rnn_type"].append(rnn_type)
-        dictionary["rnn_num"].append(no_rnn)
-        dictionary["alpha1"].append(alpha1)
-        dictionary["alpha2"].append(alpha2)
+            dictionary["big_frame_size"]="NA"
+            dictionary["frame_size"]=frame_size
+        dictionary["if_cond"]=if_cond_ckpt  
+        dictionary["rnn_type"]=rnn_type
+        dictionary["rnn_num"]=no_rnn
+        dictionary["alpha1"]=alpha1
+        dictionary["alpha2"]=alpha2
 
         #check sucess bar ratio
         sucessbar_ratio_4_folder = check_sucess_bar_ratio(npy_files_lst, int(rhythm_channel), int(chord_channel))
-        dictionary["sucessbar_ratio"].append(sucessbar_ratio_4_folder)
+        dictionary["sucessbar_ratio"]=sucessbar_ratio_4_folder
 
         #check comp ratio, long short pattern
         feature_4_each_file = [get_feature(mid_file, long_short_threshold= 64) for mid_file in mid_files_eva]
@@ -181,9 +199,9 @@ for folder in folders_2b_evaluated:
         long_patterns_4_folder = sum([x[1]for x in feature_4_each_file])
         short_patterns_4_folder = sum([x[2]for x in feature_4_each_file])
 
-        dictionary["comp_ratio"].append(ratio_4_folder)
-        dictionary["long_pattern"].append(long_patterns_4_folder)
-        dictionary["short_pattern"].append(short_patterns_4_folder)
+        dictionary["comp_ratio"]=ratio_4_folder
+        dictionary["long_pattern"]=long_patterns_4_folder
+        dictionary["short_pattern"]=short_patterns_4_folder
 
 
 
@@ -200,9 +218,7 @@ for k in dictionary.keys():
 """
 #df = pd.DataFrame(merged_dict, columns = ["logdir","comp_ratio","long_pattern","short_pattern", "mode_choice", "big_frame_size", "frame_size"])
 
-
-print(merged_dict)
-print(df[ df["mode_choice"]=="ad_rm3t"])
+print(df[ df["mode_choice"]=="ad_rm2t"])
 
 
 

@@ -70,7 +70,7 @@ def get_arguments():
     parser.add_argument('--rnn_type', choices=['LSTM', 'GRU'], required=True)
     parser.add_argument('--max_checkpoints',  type=int, default=MAX_TO_KEEP)
     parser.add_argument('--saved_path',  type=str, default=None)
-    parser.add_argument('--mode_choice', choices=['bar_note', 'nosamplernn','note',"ad_rm2t", "ad_rm3t"], type = str,default='bar_note')
+    parser.add_argument('--mode_choice', choices=['bar_note', 'nosamplernn','note',"ad_rm2t", "ad_rm3t","ad_rm2t_birnn"], type = str,default='bar_note')
     parser.add_argument('--if_cond',type=str, choices=['cond','no_cond'])
     parser.add_argument('--piano_dim',type=int, default = PIANO_DIM)
     parser.add_argument('--note_channel',type=int, default = NOTE_CHANNEL)
@@ -80,6 +80,7 @@ def get_arguments():
     parser.add_argument('--alpha1',type=float, default = 0.5)
     parser.add_argument('--drop_out',type=float, default = 0.5)   
     parser.add_argument('--alpha2',type=float, default = 0.3) 
+    parser.add_argument('--birnndim',type=int)
     return parser.parse_args()
 
 
@@ -156,7 +157,7 @@ def main():
         f.write("regularization: {}\n".format(args.l2_regularization_strength)) 
         f.write("bar_channel: {}\n".format(args.bar_channel))
         f.write("alpha2: {}\n".format(args.alpha2))
-
+        f.write("birnndim: {}\n".format(args.birnndim))
 
 
 
@@ -188,7 +189,7 @@ def main():
         elif args.mode_choice=="note":
             network_input_plder= tf.placeholder(tf.float32,shape =(None, args.seq_len, args.piano_dim), name = "input_batch_rnn")
             network_output_plder = tf.placeholder(tf.float32,shape =(None, args.seq_len-args.frame_size, args.piano_dim-args.chord_channel), name = "output_batch_rnn")
-        elif args.mode_choice=="ad_rm2t":
+        elif args.mode_choice=="ad_rm2t" or args.mode_choice=="ad_rm2t_birnn":
             network_input_plder= tf.placeholder(tf.float32,shape =(None, args.seq_len, args.piano_dim), name = "input_batch_rnn")
             rm_time_plder = tf.placeholder(tf.float32,shape =(None, args.seq_len-args.frame_size, args.rhythm_channel), name = "rm_tm_rnn")
             network_output_plder = tf.placeholder(tf.float32,shape =(None, args.seq_len-args.frame_size, args.piano_dim-args.chord_channel), name = "output_batch_rnn")

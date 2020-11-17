@@ -38,7 +38,7 @@ class AudioReader(object):
                     capacity = queue_size, dtypes=[tf.float32, tf.float32], shapes=[(None, self.piano_dim-self.chord_channel), (None, self.piano_dim-self.chord_channel)])  
             
             self.enqueue = self.queue.enqueue([self.X, self.Y])
-        elif self.mode_choice=="ad_rm2t" or self.mode_choice=="ad_rm3t":
+        elif self.mode_choice=="ad_rm2t" or self.mode_choice=="ad_rm3t" or self.mode_choice=="ad_rm2t_birnn":
             if self.if_cond:
                 self.queue = tf.PaddingFIFOQueue(
                         capacity = queue_size, dtypes=[tf.float32, tf.float32, tf.float32], shapes=[(None, self.piano_dim), (None, self.piano_dim-self.chord_channel), (None, self.rhythm_channel)])
@@ -190,7 +190,7 @@ class AudioReader(object):
     def prepare_all_data(self,audio, all_xy_lst):
         if not self.if_cond:
             audio = np.delete(audio,np.s_[self.bar_channel:self.bar_channel+self.chord_channel],axis=1)
-        if self.mode_choice=="ad_rm2t":
+        if self.mode_choice=="ad_rm2t" or self.mode_choice=="ad_rm2t_birnn":
             #make sure data starts with a bar event
             for i in range(len(audio)):
                 if np.argmax(audio[i][:self.bar_channel])==1:
@@ -311,7 +311,7 @@ class AudioReader(object):
                         break
                     sess.run(self.enqueue,feed_dict={self.X: xy[0], self.Y: xy[1]})  
 
-            elif self.mode_choice=="ad_rm2t" or self.mode_choice=="ad_rm3t":
+            elif self.mode_choice=="ad_rm2t" or self.mode_choice=="ad_rm3t" or self.mode_choice=="ad_rm2t_birnn":
 
                 for xyz in all_xyz_lst:
                     if self.coord.should_stop():
@@ -343,7 +343,7 @@ class AudioReader(object):
             X = np.stack(X_lst, axis = 0)
             y = np.stack(y_lst, axis = 0)
             return X, y
-        elif self.mode_choice=="ad_rm2t" or self.mode_choice=="ad_rm3t":
+        elif self.mode_choice=="ad_rm2t" or self.mode_choice=="ad_rm3t" or self.mode_choice=="ad_rm2t_birnn":
             X_lst, y_lst,z_lst = zip(*all_xyz_lst)
             X = np.stack(X_lst, axis = 0)
             y = np.stack(y_lst, axis = 0)
