@@ -193,8 +193,11 @@ class SampleRnnModel_w_mode_switch(object):
         
         return sample_outputs_logits  #return (batch, pred_length, piano_dim)
 
-    def birnn(self,forward_cell, backward_cell, all_chords):
-        outputs_tuple,_ = tf.nn.bidirectional_dynamic_rnn(cell_fw = forward_cell, cell_bw = backward_cell,inputs = all_chords, dtype=tf.float32)
+    def birnn(self, all_chords):
+        
+        outputs_tuple,_ = tf.nn.bidirectional_dynamic_rnn(cell_fw = self.birnn_fwcell, cell_bw = self.birnn_bwcell,inputs = all_chords, dtype=tf.float32)
+
+        #outputs_tuple,_ = tf.nn.bidirectional_dynamic_rnn(cell_fw = forward_cell, cell_bw = backward_cell,inputs = all_chords, dtype=tf.float32)
         outputs = tf.concat([outputs_tuple[0],outputs_tuple[1]], axis = -1)
         #all_chords_birnn = self.weight_bias(outputs, 2*self.chord_channel ,"birnn_weights_3") 
         all_chords_birnn = self.weight_bias(outputs, self.chord_channel ,"birnn_weights_3") 
@@ -283,13 +286,12 @@ class SampleRnnModel_w_mode_switch(object):
         #seperate input
         all_bars = one_t_input[:,:,:self.bar_channel]
         all_chords = one_t_input[:,:,self.bar_channel:self.bar_channel+self.chord_channel]
-        all_rhythms = one_t_input[:,:,self.bar_channel+self.chord_channel:self.bar_channel+self.chord_channel+self.rhythm_channel]
-        all_melodies = one_t_input[:,:,self.bar_channel+self.chord_channel+self.rhythm_channel:]
+        all_rhythms_melodies = one_t_input[:,:,self.bar_channel+self.chord_channel:]
 
 
-        all_chords_birnn = self.birnn(self.birnn_fwcell,self.birnn_bwcell,all_chords)
-
-        one_t_input_new = tf.concat([all_bars, all_chords_birnn, all_rhythms,all_melodies], axis = -1)
+        #all_chords_birnn = self.birnn(self.birnn_fwcell,self.birnn_bwcell,all_chords)
+        all_chords_birnn = self.birnn(all_chords)
+        one_t_input_new = tf.concat([all_bars, all_chords_birnn, all_rhythms_melodies], axis = -1)
         sample_input = one_t_input_new[:,:-1,:] # batch, seq-1, piano_dim
  
         frame_input = one_t_input_new[:, :-self.frame_size,:] #(batch, seq-frame_size, piano_dim)

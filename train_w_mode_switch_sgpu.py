@@ -4,7 +4,7 @@ from datetime import datetime
 import json
 import os
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"]="0"
+os.environ["CUDA_VISIBLE_DEVICES"]="1"
 import sys
 import time
 from datetime import datetime
@@ -31,7 +31,7 @@ LEARNING_RATE = 6e-5
 SEQ_LEN = 32 
 L2_REGULARIZATION_STRENGTH = 0
 MOMENTUM = 0.9
-MAX_TO_KEEP = 150
+MAX_TO_KEEP = 50
 PIANO_DIM = 195
 NOTE_CHANNEL = 130
 RHYTHM_CHANNEL = 16
