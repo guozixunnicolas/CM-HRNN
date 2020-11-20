@@ -7,7 +7,7 @@ import numpy as np
 import tensorflow as tf
 import glob
 import argparse
-from lookup_table import rhythm_to_index,decode_rhythm
+from .lookup_table import rhythm_to_index,decode_rhythm
 
 class AudioReader(object):
 

@@ -134,7 +134,10 @@ folders_2b_evaluated = ["test/generated_result/11_14_2020_13_23_50_Electronic_ad
                        "test/generated_result/11_14_2020_13_17_51_Electronic_ad_rm3t/120000/16/0.6_0.4",
                        "test/generated_result/11_10_2020_08_15_26_Electronic_ad_rm2t/120000/16/0.7_0.1",
                        "test/generated_result/11_10_2020_08_15_26_Electronic_ad_rm2t/120000/16/0.7_0.3",
-                       "test/generated_result/11_10_2020_08_15_26_Electronic_ad_rm2t/120000/16/0.7_0.4"]
+                       "test/generated_result/11_10_2020_08_15_26_Electronic_ad_rm2t/120000/16/0.7_0.4",
+                       "test/generated_result/11_17_2020_07_19_37_Electronic_ad_rm2t_birnn/120000/16/0.7_0.4",
+                       "test/generated_result/11_17_2020_07_19_37_Electronic_ad_rm2t_birnn/120000/16/0.7_0.2",
+                       "test/generated_result/11_17_2020_07_19_37_Electronic_ad_rm2t_birnn/120000/16/0.7_0.1",]
 merged_dict = []
 for folder in folders_2b_evaluated:
 
@@ -218,9 +221,9 @@ for k in dictionary.keys():
 """
 #df = pd.DataFrame(merged_dict, columns = ["logdir","comp_ratio","long_pattern","short_pattern", "mode_choice", "big_frame_size", "frame_size"])
 
-print(df[ df["mode_choice"]=="ad_rm2t"])
+print(df[ df["mode_choice"]=="ad_rm2t_birnn"])
 
-
+#print(df[ 'mode_choice','long_pattern'])
 
 
 

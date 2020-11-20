@@ -119,10 +119,7 @@ def get_arguments():
 
 
 def choose_from_distribution(preds, temperature=1.0):
-    # helper function to sample an index from a probability array
-    #preds shape should be : (1,piano_dim)
-    #print("asuhasuhuahfhf",preds.shape)
-    #print("asdssasdadadasdasdasd",preds.shape)
+
     preds = np.asarray(preds).astype('float64')
     return_array = np.zeros_like(preds)
     preds = np.log(preds[0]) / temperature
