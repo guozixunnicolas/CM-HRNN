@@ -302,6 +302,19 @@ class SampleRnnModel_w_mode_switch(object):
         sample_logits= self.sample_level(sample_input, frame_output = frame_outputs, rm_time = remaining_time_input)
         return sample_logits  
 
+    def _create_network_ad_rm2t_fc(self, one_t_input, rm_tm):
+        sample_input = one_t_input[:,:-1,:] # batch, seq-1, piano_dim
+ 
+        frame_input = one_t_input[:, :-self.frame_size,:] #(batch, seq-frame_size, piano_dim)
+        remaining_time_input = rm_tm #(batch, seq-frame_size, piano_dim)
+        print("fram input dim",frame_input)
+        ##frame_level##
+        frame_outputs , final_frame_state = self.frame_level(frame_input)
+        ##sample_level## 
+        sample_logits= self.sample_level(sample_input, frame_output = frame_outputs, rm_time = remaining_time_input)
+        return sample_logits        
+
+
     def loss_SampleRnn(self, X,y, rm_time = None,l2_regularization_strength=None, name='sample'):
         """ nosamplernn: X: (batch, frame_size, dim), Y:(batch, 1, dim)
             barnote: X(batch, seq_len, dim), Y:(batch, seq_len-frame-big_frame, dim)
@@ -332,7 +345,10 @@ class SampleRnnModel_w_mode_switch(object):
                 pd = pred_logits  
             elif self.mode_choice=="ad_rm2t_birnn":  
                 pred_logits= self._create_network_ad_rm2t_birnn(one_t_input = self.X, rm_tm = self.rm_time) #(batch* seq_len-frame, self.note + self.rhythm)
-                pd = pred_logits                        
+                pd = pred_logits     
+            elif self.mode_choice=="ad_rm2t_fc":  
+                pred_logits= self._create_network_ad_rm2t_fc(one_t_input = self.X, rm_tm = self.rm_time) #(batch* seq_len-frame, self.note + self.rhythm)
+                pd = pred_logits                     
             gt_bar = self.y[:, :, :self.bar_channel]
             gt_sustain = self.y[:, :, self.bar_channel : self.bar_channel+self.rhythm_channel]
             gt_note = self.y[:,:, self.bar_channel+self.rhythm_channel:]
