@@ -778,6 +778,143 @@ def create_graph_ad_rm2t_birnn(net):
         infe_para['rhythm'] = tf.nn.softmax(sample_out[:, net.bar_channel:net.bar_channel+net.rhythm_channel])
         infe_para['bar'] = tf.nn.softmax(sample_out[:, :net.bar_channel])
         return infe_para
+def create_graph_ad_rm2t_fc(net):
+    with tf.name_scope('infe_para'):
+        infe_para = dict()
+        
+
+        inpt_lst_dim = net.piano_dim + net.chord_channel
+
+
+        infe_para['infe_frame_inp'] = tf.placeholder(tf.float32, name = "infe_frame_inp",shape = [net.batch_size,net.frame_size,inpt_lst_dim])
+
+        infe_para['infe_frame_outp'] = tf.placeholder(tf.float32, name = "infe_frame_outp",shape = [net.batch_size,net.frame_size,net.dim])
+        
+        infe_para['infe_frame_state'] = net.frame_cell.zero_state(net.batch_size,tf.float32) #pay attention here
+
+        infe_para['infe_sample_inp'] = tf.placeholder(tf.float32, name = "infe_sample_inp",shape = [net.batch_size,net.frame_size,inpt_lst_dim])
+        
+        infe_para['infe_frame_outp_slices'] = tf.placeholder(tf.float32, name = "infe_frame_outp_slices",shape = [net.batch_size,1,net.dim])
+
+        infe_para['infe_rm_tm'] = tf.placeholder(tf.float32, name = "infe_rm_tm",shape = [net.batch_size,1,net.rhythm_channel])
+
+        tf.get_variable_scope().reuse_variables()
+
+
+        infe_para['infe_frame_outp'], infe_para['infe_next_frame_state'] = net.frame_level(
+                frame_input=infe_para['infe_frame_inp'],
+                frame_state = infe_para['infe_frame_state']
+        )
+
+        sample_out = net.sample_level(
+            frame_output=infe_para['infe_frame_outp_slices'],
+            sample_input_sequences=infe_para['infe_sample_inp'],
+            rm_time=infe_para['infe_rm_tm']
+        )
+        sample_out = tf.reshape(
+            sample_out,
+            [-1, net.piano_dim -net.chord_channel]
+        )
+        infe_para['note'] = tf.nn.softmax(sample_out[:, net.bar_channel+net.rhythm_channel:])
+        infe_para['rhythm'] = tf.nn.softmax(sample_out[:, net.bar_channel:net.bar_channel+net.rhythm_channel])
+        infe_para['bar'] = tf.nn.softmax(sample_out[:, :net.bar_channel])
+        return infe_para
+
+def forward_prop_ad_rm2t_fc(net, infe_para, sess, condition, condition_name, gen_dir,args,seed_length):
+    for i in range(len(condition)-1,0,-1):
+        if np.argmax(condition[i][net.bar_channel:net.bar_channel+net.chord_channel])!=0:
+            print("chord is rest")
+            break
+        else:
+            trim_index = i
+    condition = condition[:trim_index, :]
+    LENGTH = condition.shape[0]
+    rest_chord = np.zeros((1,net.chord_channel))
+    rest_chord[:,0] = 1
+    all_chords= condition[:,net.bar_channel:net.bar_channel+net.chord_channel] #(len, chord_dim)
+    shifted_chord = np.concatenate((all_chords[1:,:],rest_chord),axis = 0) 
+    condition_with_fc_chord = np.concatenate((condition[:,:net.bar_channel],shifted_chord,condition[:,net.bar_channel:]),axis = -1)
+
+    original_file= np.reshape(condition_with_fc_chord,(net.batch_size, LENGTH, net.piano_dim+net.chord_channel))
+
+    samples = np.zeros((net.batch_size, LENGTH, net.piano_dim+net.chord_channel), dtype='float32')
+
+    ####load stimulus####
+    samples[:, :seed_length, :] = original_file[:,:seed_length, :]
+
+    final_s = sess.run(net.frame_init) #zero state for frame cell
+    for t in range(net.frame_size, LENGTH):
+
+        # frame
+        if t % net.frame_size == 0: #if (t - net.frame_size) % net.frame_size == 0:
+            frame_input_sequences = samples[: , t - net.frame_size:t, :]
+            frame_out, final_s = sess.run(
+                [
+                    infe_para['infe_frame_outp'],
+                    infe_para['infe_next_frame_state']
+                ],
+                feed_dict={
+                    infe_para['infe_frame_inp']: frame_input_sequences,
+                    infe_para['infe_frame_state']: final_s
+                }
+            )
+        # sample
+        sample_input_sequences = samples[:, t-net.frame_size:t, :]
+
+        #find rm_tm array
+        rm_tm_array = np.zeros((net.batch_size,1,net.rhythm_channel))
+            #print("hey",t)
+        current_time = t
+        prev_time = t-1
+        while np.argmax(samples[0][prev_time][:net.bar_channel])!=1:
+            prev_time -= 1
+        duration_accumulated = 0
+        for idx in range(prev_time,current_time):
+            duration_raw = np.argmax(samples[0][idx][net.bar_channel+net.chord_channel: net.bar_channel+net.chord_channel+net.rhythm_channel])
+            duration = decode_rhythm(duration_raw,ignore_bar_event = True)
+            duration_accumulated+=duration
+        #print("dur accumulated",duration_accumulated)
+        duration_left_raw = duration_accumulated
+        if duration_left_raw>4:
+            print("dur warning",duration_accumulated)
+            duration_left_raw = 4
+        rm_duration_idx = rhythm_to_index(duration_left_raw)
+
+        rm_tm_array[:,:,rm_duration_idx] = 1
+
+
+
+        frame_output_idx = t % net.frame_size
+        sample_out_note_distribution, rhythm_out_distribution, bar_out_distribution= sess.run(
+            [infe_para['note'],infe_para["rhythm"],infe_para["bar"]
+            ],
+            feed_dict={ infe_para['infe_frame_outp_slices']: np.expand_dims(frame_out[: , frame_output_idx, :], axis = 1),
+                        infe_para['infe_sample_inp']: sample_input_sequences,
+                        infe_para['infe_rm_tm']:rm_tm_array} )
+
+        sample_out_note = choose_from_distribution(sample_out_note_distribution, temperature = args.note_temp)
+        sample_out_rhythm = choose_from_distribution(rhythm_out_distribution, temperature = args.rhythm_temp)
+        sample_out_bar = choose_from_distribution(bar_out_distribution,temperature = 0.1)
+        #print("bar",sample_out_bar)
+        if net.if_cond:
+            sample_ori_chord = original_file[:, t, net.bar_channel:net.bar_channel+2*net.chord_channel]
+            samples[:, t] = np.concatenate((sample_out_bar,sample_ori_chord, sample_out_rhythm, sample_out_note), axis = 1)
+        else:
+            samples[:, t] = np.concatenate((sample_out_bar,sample_out_rhythm, sample_out_note), axis = 1)
+
+    data_genre = args.logdir_root.split("/")[-2] #08_16_2020_03_31_10_Jazz_npy
+    ckpt = args.logdir_root.split("/")[-1].split("-")[-1] #100000
+    seed_length = str(seed_length)
+    temp = str(args.note_temp)+"_"+str(args.rhythm_temp)
+    #condition_name = condition_name.split('.')[-2]
+    unique_name = "_".join((data_genre,ckpt,seed_length,temp,condition_name))
+
+    melody_npy = os.path.join(gen_dir,unique_name+'.npy')
+    melody_mid = os.path.join(gen_dir,unique_name+'.mid')
+
+    np.save(melody_npy,samples)
+    generate_midi(melody_npy, melody_mid, net, original_file)
+
 
 def forward_prop_ad_rm3t(net, infe_para, sess, condition, condition_name, gen_dir,args, seed_length):
     ####set condition#### #condition: (length, piano_dim), first trim off end empty chord
@@ -1063,6 +1200,10 @@ def main():
             network_input_plder= tf.placeholder(tf.float32,shape =(None, mod_arg.seq_len, mod_arg.piano_dim), name = "input_batch_rnn")
             rm_time_plder = tf.placeholder(tf.float32,shape =(None, mod_arg.seq_len-mod_arg.big_frame_size, mod_arg.rhythm_channel), name = "rm_tm_rnn")
             network_output_plder = tf.placeholder(tf.float32,shape =(None, mod_arg.seq_len-mod_arg.big_frame_size, mod_arg.piano_dim-mod_arg.chord_channel), name = "output_batch_rnn")
+        elif mod_arg.mode_choice=="ad_rm2t_fc":
+            network_input_plder= tf.placeholder(tf.float32,shape =(None, mod_arg.seq_len, mod_arg.piano_dim+mod_arg.chord_channel), name = "input_batch_rnn")
+            rm_time_plder = tf.placeholder(tf.float32,shape =(None, mod_arg.seq_len-mod_arg.frame_size, mod_arg.rhythm_channel), name = "rm_tm_rnn")
+            network_output_plder = tf.placeholder(tf.float32,shape =(None, mod_arg.seq_len-mod_arg.frame_size, mod_arg.piano_dim-mod_arg.chord_channel), name = "output_batch_rnn")
 
     else:
         if mod_arg.mode_choice=="nosamplernn":
@@ -1122,6 +1263,8 @@ def main():
         graph= create_graph_ad_rm3t(net)
     elif mod_arg.mode_choice =="ad_rm2t_birnn":
         graph= create_graph_ad_rm2t_birnn(net)
+    elif mod_arg.mode_choice =="ad_rm2t_fc":
+        graph= create_graph_ad_rm2t_fc(net)
     #graph_one_tier = create_graph_one_tier(net)
     #
     logdir = args.logdir_root
@@ -1165,6 +1308,8 @@ def main():
                 forward_prop_ad_rm3t(net, graph, sess, original_test_file, file_name, gen_dir_model_number, args, mod_arg.frame_size)
             elif mod_arg.mode_choice =="ad_rm2t_birnn":
                 forward_prop_ad_rm2t_birnn(net, graph, sess, original_test_file, file_name, gen_dir_model_number, args, mod_arg.frame_size)
+            elif mod_arg.mode_choice =="ad_rm2t_fc":
+                forward_prop_ad_rm2t_fc(net, graph, sess, original_test_file, file_name, gen_dir_model_number, args, mod_arg.frame_size)
 
             t_end = time.time()
             print(file_name,' processing time: ', t_end-t_start)

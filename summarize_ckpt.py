@@ -221,7 +221,7 @@ for k in dictionary.keys():
 """
 #df = pd.DataFrame(merged_dict, columns = ["logdir","comp_ratio","long_pattern","short_pattern", "mode_choice", "big_frame_size", "frame_size"])
 
-print(df[ df["mode_choice"]=="ad_rm2t_birnn"])
+print(df[ df["mode_choice"]=="ad_rm2t"])
 
 #print(df[ 'mode_choice','long_pattern'])
 
