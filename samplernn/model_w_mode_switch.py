@@ -144,7 +144,31 @@ class SampleRnnModel_w_mode_switch(object):
                                        [tf.shape(frame_outputs_all_upsample)[0],
                                         tf.shape(frame_outputs_all_upsample)[1] * self.frame_size,
                                         self.dim]) #(batch, n_frame*frame_size, dim)
+            return frame_outputs, frame_last_state    
+
+    def frame_level_switch(self, frame_input, frame_state = None ,bigframe_output = None, if_rs = True):
+        frame_input_chunks = tf.reshape(frame_input,[-1, #batch
+                                                    int(frame_input.shape[1]) // self.frame_size, #no_of_chunks 
+                                                    self.frame_size*int(frame_input.shape[-1])]) #frame_size*merged_dim
+        with tf.variable_scope("FRAME_RNN"):
+            
+            if bigframe_output is not None:
+                frame_input_chunks = self.weight_bias(frame_input_chunks, self.dim, 'emb_frame_chunks')
+                frame_input_chunks += bigframe_output #batch, no_chunk, dim + batch, no_chunk, dim      
+            
+            if frame_state is not None: #during generation
+                frame_outputs_all_stps, frame_last_state = tf.nn.dynamic_rnn(self.frame_cell, frame_input_chunks,initial_state = frame_state, dtype=tf.float32)
+            else: #during training
+                frame_outputs_all_stps, frame_last_state = tf.nn.dynamic_rnn(self.frame_cell, frame_input_chunks, dtype=tf.float32)
+            if bigframe_output is not None and if_rs is True:
+                frame_outputs_all_stps += bigframe_output #batch, no_chunk, dim + batch, no_chunk, dim
+            frame_outputs_all_upsample = self.weight_bias(frame_outputs_all_stps, self.dim*self.frame_size, 'emb_frame_proj')
+            frame_outputs = tf.reshape(frame_outputs_all_upsample,
+                                       [tf.shape(frame_outputs_all_upsample)[0],
+                                        tf.shape(frame_outputs_all_upsample)[1] * self.frame_size,
+                                        self.dim]) #(batch, n_frame*frame_size, dim)
             return frame_outputs, frame_last_state                
+       
         
     def frame_level_before(self, frame_input, frame_state = None ,bigframe_output = None):
         frame_input_chunks = tf.reshape(frame_input,[-1, #batch
@@ -368,8 +392,8 @@ class SampleRnnModel_w_mode_switch(object):
 
             big_frame_outputs , final_big_frame_state = self.big_frame_level(big_frame_input)
 
-            #frame_outputs , final_frame_state = self.frame_level_before(frame_input, bigframe_output = big_frame_outputs)
-            frame_outputs , final_frame_state = self.frame_level(frame_input, bigframe_output = big_frame_outputs)
+            frame_outputs , final_frame_state = self.frame_level_before(frame_input, bigframe_output = big_frame_outputs)
+            #frame_outputs , final_frame_state = self.frame_level(frame_input, bigframe_output = big_frame_outputs)
 
             remaining_time_input = rm_tm #(batch, seq-frame_size, piano_dim)
             ##sample_level## 

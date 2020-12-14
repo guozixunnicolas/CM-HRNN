@@ -313,15 +313,22 @@ def create_graph_ad_rm2t_fc(net):
         infe_para['bar'] = tf.nn.softmax(sample_out[:, :net.bar_channel])
         return infe_para
 
-def create_graph(net,mode_choice):
+def create_graph_ad_rm3t_fc(net, if_residual):
     with tf.name_scope('infe_para'):
         infe_para = define_placeholder(net).infe_para
 
         tf.get_variable_scope().reuse_variables()
 
-        infe_para['infe_frame_outp'], infe_para['infe_next_frame_state'] = net.frame_level(
+        infe_para['infe_big_frame_outp'], infe_para['infe_next_big_frame_state'] = net.big_frame_level(
+                big_frame_input=infe_para['infe_big_frame_inp'],
+                big_frame_state = infe_para['infe_big_frame_state']
+        )
+
+        infe_para['infe_frame_outp'], infe_para['infe_next_frame_state'] = net.frame_level_switch(
                 frame_input=infe_para['infe_frame_inp'],
-                frame_state = infe_para['infe_frame_state']
+                bigframe_output=infe_para['infe_big_frame_outp_slices'],
+                frame_state = infe_para['infe_frame_state'],
+                if_rs = if_residual
         )
 
         sample_out = net.sample_level(
@@ -579,42 +586,17 @@ def main():
     net = SampleRnnModel_w_mode_switch(args = mod_arg, if_train = False)
 
     if mod_arg.if_cond == "cond":
-        if mod_arg.mode_choice=="nosamplernn":
-            network_input_plder= tf.placeholder(tf.float32,shape =(None, mod_arg.frame_size, mod_arg.piano_dim), name = "input_batch_rnn")
-            network_output_plder = tf.placeholder(tf.float32,shape =(None, 1, mod_arg.piano_dim-mod_arg.chord_channel), name = "output_batch_rnn")
-        elif mod_arg.mode_choice=="bar_note":
-            network_input_plder= tf.placeholder(tf.float32,shape =(None, mod_arg.seq_len, mod_arg.piano_dim), name = "input_batch_rnn")
-            #network_output_plder = tf.placeholder(tf.float32,shape =(None, args.seq_len-args.frame_size-args.big_frame_size, args.piano_dim), name = "output_batch_rnn")
-            network_output_plder = tf.placeholder(tf.float32,shape =(None, mod_arg.seq_len-mod_arg.big_frame_size,mod_arg.piano_dim-mod_arg.chord_channel), name = "output_batch_rnn")
-        elif mod_arg.mode_choice=="note":
-            network_input_plder= tf.placeholder(tf.float32,shape =(None, mod_arg.seq_len, mod_arg.piano_dim), name = "input_batch_rnn")
-            network_output_plder = tf.placeholder(tf.float32,shape =(None, mod_arg.seq_len-mod_arg.frame_size, mod_arg.piano_dim-mod_arg.chord_channel), name = "output_batch_rnn")
-        elif mod_arg.mode_choice=="ad_rm2t" or mod_arg.mode_choice=="ad_rm2t_birnn":
-            network_input_plder= tf.placeholder(tf.float32,shape =(None, mod_arg.seq_len, mod_arg.piano_dim), name = "input_batch_rnn")
-            rm_time_plder = tf.placeholder(tf.float32,shape =(None, mod_arg.seq_len-mod_arg.frame_size, mod_arg.rhythm_channel), name = "rm_tm_rnn")
-            network_output_plder = tf.placeholder(tf.float32,shape =(None, mod_arg.seq_len-mod_arg.frame_size, mod_arg.piano_dim-mod_arg.chord_channel), name = "output_batch_rnn")
-        elif mod_arg.mode_choice=="ad_rm3t":
+        if mod_arg.mode_choice=="ad_rm3t_fc" or mod_arg.mode_choice=="ad_rm3t_fc_rs":
             network_input_plder= tf.placeholder(tf.float32,shape =(None, mod_arg.seq_len, mod_arg.piano_dim), name = "input_batch_rnn")
             rm_time_plder = tf.placeholder(tf.float32,shape =(None, mod_arg.seq_len-mod_arg.big_frame_size, mod_arg.rhythm_channel), name = "rm_tm_rnn")
             network_output_plder = tf.placeholder(tf.float32,shape =(None, mod_arg.seq_len-mod_arg.big_frame_size, mod_arg.piano_dim-mod_arg.chord_channel), name = "output_batch_rnn")
-        elif mod_arg.mode_choice=="ad_rm2t_fc":
+        elif mod_arg.mode_choice=="ad_rm2t_fc" :
             network_input_plder= tf.placeholder(tf.float32,shape =(None, mod_arg.seq_len, mod_arg.piano_dim+mod_arg.chord_channel), name = "input_batch_rnn")
             rm_time_plder = tf.placeholder(tf.float32,shape =(None, mod_arg.seq_len-mod_arg.frame_size, mod_arg.rhythm_channel), name = "rm_tm_rnn")
             network_output_plder = tf.placeholder(tf.float32,shape =(None, mod_arg.seq_len-mod_arg.frame_size, mod_arg.piano_dim-mod_arg.chord_channel), name = "output_batch_rnn")
 
     else:
-        if mod_arg.mode_choice=="nosamplernn":
-            network_input_plder= tf.placeholder(tf.float32,shape =(None, mod_arg.frame_size, mod_arg.piano_dim-mod_arg.chord_channel), name = "input_batch_rnn")
-            network_output_plder = tf.placeholder(tf.float32,shape =(None, 1, mod_arg.piano_dim-mod_arg.chord_channel), name = "output_batch_rnn")
-        elif mod_arg.mode_choice=="bar_note":
-            network_input_plder= tf.placeholder(tf.float32,shape =(None, mod_arg.seq_len, mod_arg.piano_dim-mod_arg.chord_channel), name = "input_batch_rnn")
-            #network_output_plder = tf.placeholder(tf.float32,shape =(None, args.seq_len-args.frame_size-args.big_frame_size, args.piano_dim-args.chord_channel), name = "output_batch_rnn")
-            network_output_plder = tf.placeholder(tf.float32,shape =(None, mod_arg.seq_len-mod_arg.big_frame_size, mod_arg.piano_dim-mod_arg.chord_channel), name = "output_batch_rnn")
-
-        elif mod_arg.mode_choice=="note":
-            network_input_plder= tf.placeholder(tf.float32,shape =(None, mod_arg.seq_len, mod_arg.piano_dim-mod_arg.chord_channel), name = "input_batch_rnn")
-            network_output_plder = tf.placeholder(tf.float32,shape =(None, mod_arg.seq_len-mod_arg.frame_size, mod_arg.piano_dim-mod_arg.chord_channel), name = "output_batch_rnn")
-        elif mod_arg.mode_choice=="ad_rm2t":
+        if mod_arg.mode_choice=="ad_rm2t":
             network_input_plder= tf.placeholder(tf.float32,shape =(None, mod_arg.seq_len, mod_arg.piano_dim-mod_arg.chord_channel), name = "input_batch_rnn")
             rm_time_plder = tf.placeholder(tf.float32,shape =(None, mod_arg.seq_len-mod_arg.frame_size, mod_arg.rhythm_channel), name = "rm_tm_rnn")
             network_output_plder = tf.placeholder(tf.float32,shape =(None, mod_arg.seq_len-mod_arg.frame_size, mod_arg.piano_dim-mod_arg.chord_channel), name = "output_batch_rnn")
@@ -646,22 +628,12 @@ def main():
     tf_config.gpu_options.allow_growth = True
     saver = tf.train.Saver()
 
-    if mod_arg.mode_choice=="bar_note":
-        graph = create_graph_bar_note(net)
-
-    elif mod_arg.mode_choice =="nosamplernn":
-        graph = create_graph_nosamplernn(net)
-
-    elif mod_arg.mode_choice =="note":
-        graph= create_graph_note(net)
-    elif mod_arg.mode_choice =="ad_rm2t":
-        graph= create_graph_ad_rm2t(net)
-    elif mod_arg.mode_choice =="ad_rm3t":
-        graph= create_graph_ad_rm3t(net)
-    elif mod_arg.mode_choice =="ad_rm2t_birnn":
-        graph= create_graph_ad_rm2t_birnn(net)
-    elif mod_arg.mode_choice =="ad_rm2t_fc":
+    if mod_arg.mode_choice =="ad_rm2t_fc":
         graph= create_graph_ad_rm2t_fc(net)
+    elif mod_arg.mode_choice =="ad_rm3t_fc":
+        graph= create_graph_ad_rm3t_fc(net, if_residual = False)
+    elif mod_arg.mode_choice =="ad_rm3t_fc_rs":
+        graph= create_graph_ad_rm3t_fc(net, if_residual = True)    
     #graph_one_tier = create_graph_one_tier(net)
     #
     logdir = args.logdir_root
@@ -670,7 +642,7 @@ def main():
     logdir_path = logdir.split('/')[-2] #12_13_2019_12_12_14
     model_name = logdir.split('/')[-1] #model.ckpt-180
     model_number = model_name.split('-')[-1] #180
-    if mod_arg.mode_choice =="bar_note" or mod_arg.mode_choice=="ad_rm3t":
+    if mod_arg.mode_choice=="ad_rm3t_fc" or mod_arg.mode_choice=="ad_rm3t_fc_rs":
         print("big frame size as seed!",mod_arg.big_frame_size)
         seed_length = mod_arg.big_frame_size
     else:
