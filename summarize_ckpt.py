@@ -114,7 +114,7 @@ def get_feature(mid_file, long_short_threshold = 16):
     
     return ratio, num_long_pattern, num_short_pattern, current_file_has_long_pattern
 
-folders_2b_evaluated = ["test/generated_result/11_14_2020_13_23_50_Electronic_ad_rm3t/120000/32/0.6_0.4",
+"""folders_2b_evaluated = ["test/generated_result/11_14_2020_13_23_50_Electronic_ad_rm3t/120000/32/0.6_0.4",
                        "test/generated_result/11_14_2020_13_23_50_Electronic_ad_rm3t/120000/32/0.6_0.2",
                        "test/generated_result/11_14_2020_13_23_50_Electronic_ad_rm3t/120000/32/0.6_0.1",
                        "test/generated_result/11_14_2020_13_22_48_Electronic_ad_rm3t/120000/16/0.6_0.4",
@@ -138,6 +138,14 @@ folders_2b_evaluated = ["test/generated_result/11_14_2020_13_23_50_Electronic_ad
                        "test/generated_result/11_17_2020_07_19_37_Electronic_ad_rm2t_birnn/120000/16/0.7_0.4",
                        "test/generated_result/11_17_2020_07_19_37_Electronic_ad_rm2t_birnn/120000/16/0.7_0.2",
                        "test/generated_result/11_17_2020_07_19_37_Electronic_ad_rm2t_birnn/120000/16/0.7_0.1",]
+"""
+folders_2b_evaluated = ["test/generated_result/12_08_2020_16_37_41_Electronic_ad_rm3t_fc/120000/16/0.7_0.1",
+                        "test/generated_result/12_08_2020_16_37_41_Electronic_ad_rm3t_fc/120000/16/0.7_0.2",
+                        "test/generated_result/12_08_2020_16_37_41_Electronic_ad_rm3t_fc/120000/16/0.7_0.4",
+                        "test/generated_result/12_08_2020_16_39_07_Electronic_ad_rm3t_fc_rs/120000/16/0.7_0.1",
+                        "test/generated_result/12_08_2020_16_39_07_Electronic_ad_rm3t_fc_rs/120000/16/0.7_0.2",
+                        "test/generated_result/12_08_2020_16_39_07_Electronic_ad_rm3t_fc_rs/120000/16/0.7_0.4"
+                        ]
 merged_dict = []
 for folder in folders_2b_evaluated:
 
