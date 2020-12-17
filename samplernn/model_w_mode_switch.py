@@ -47,6 +47,7 @@ class SampleRnnModel_w_mode_switch(object):
                     cell = tf.contrib.rnn.DropoutWrapper(cell,output_keep_prob=self.drop_out_keep_prob)
                 return cell
             elif self.rnn_type =="LSTM":
+                print("yeah lstm")
                 cell = tf.contrib.rnn.BasicLSTMCell(self.dim)
                 #cell = tf.contrib.rnn.AttentionCellWrapper(cell, attn_length=2)
                 if self.if_train:

@@ -139,13 +139,22 @@ def get_feature(mid_file, long_short_threshold = 16):
                        "test/generated_result/11_17_2020_07_19_37_Electronic_ad_rm2t_birnn/120000/16/0.7_0.2",
                        "test/generated_result/11_17_2020_07_19_37_Electronic_ad_rm2t_birnn/120000/16/0.7_0.1",]
 """
-folders_2b_evaluated = ["test/generated_result/12_08_2020_16_37_41_Electronic_ad_rm3t_fc/120000/16/0.7_0.1",
+"""folders_2b_evaluated = ["test/generated_result/12_08_2020_16_37_41_Electronic_ad_rm3t_fc/120000/16/0.7_0.1",
                         "test/generated_result/12_08_2020_16_37_41_Electronic_ad_rm3t_fc/120000/16/0.7_0.2",
                         "test/generated_result/12_08_2020_16_37_41_Electronic_ad_rm3t_fc/120000/16/0.7_0.4",
                         "test/generated_result/12_08_2020_16_39_07_Electronic_ad_rm3t_fc_rs/120000/16/0.7_0.1",
                         "test/generated_result/12_08_2020_16_39_07_Electronic_ad_rm3t_fc_rs/120000/16/0.7_0.2",
                         "test/generated_result/12_08_2020_16_39_07_Electronic_ad_rm3t_fc_rs/120000/16/0.7_0.4"
-                        ]
+                        ]"""
+folders_2b_evaluated = [ "test/generated_result/11_20_2020_09_17_54_Electronic_ad_rm2t_fc/120000/16/0.7_0.1",
+"test/generated_result/11_20_2020_09_17_54_Electronic_ad_rm2t_fc/120000/16/0.7_0.2",
+"test/generated_result/11_20_2020_09_17_54_Electronic_ad_rm2t_fc/120000/16/0.7_0.4",
+"test/generated_result/12_15_2020_05_21_43_Electronic_ad_rm3t_fc_rs/120000/16/0.7_0.1",
+"test/generated_result/12_15_2020_05_21_43_Electronic_ad_rm3t_fc_rs/120000/16/0.7_0.2",
+"test/generated_result/12_15_2020_05_21_43_Electronic_ad_rm3t_fc_rs/120000/16/0.7_0.4",
+"test/generated_result/12_15_2020_05_23_16_Electronic_ad_rm3t_fc_rs/120000/16/0.7_0.1",
+"test/generated_result/12_15_2020_05_23_16_Electronic_ad_rm3t_fc_rs/120000/16/0.7_0.2",
+"test/generated_result/12_15_2020_05_23_16_Electronic_ad_rm3t_fc_rs/120000/16/0.7_0.4"]                        
 merged_dict = []
 for folder in folders_2b_evaluated:
 
@@ -229,7 +238,7 @@ for k in dictionary.keys():
 """
 #df = pd.DataFrame(merged_dict, columns = ["logdir","comp_ratio","long_pattern","short_pattern", "mode_choice", "big_frame_size", "frame_size"])
 
-print(df[ df["mode_choice"]=="ad_rm2t"])
+print(df[ df["mode_choice"]=="ad_rm2t_fc"])
 
 #print(df[ 'mode_choice','long_pattern'])
 
