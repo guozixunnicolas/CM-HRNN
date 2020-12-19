@@ -70,7 +70,7 @@ def get_arguments():
     parser.add_argument('--rnn_type', choices=['LSTM', 'GRU'], required=True)
     parser.add_argument('--max_checkpoints',  type=int, default=MAX_TO_KEEP)
     parser.add_argument('--saved_path',  type=str, default=None)
-    parser.add_argument('--mode_choice', choices=["ad_rm2t_birnn","ad_rm2t_fc","ad_rm3t_fc","ad_rm3t_fc_rs","bln_attn_fc"], type = str,default='ad_rm2t_fc')
+    parser.add_argument('--mode_choice', choices=["ad_rm2t_birnn","ad_rm2t_fc","ad_rm3t_fc","ad_rm3t_fc_rs","bln_attn_fc","2t_fc","3t_fc"], type = str,default='ad_rm2t_fc')
     parser.add_argument('--if_cond',type=str, choices=['cond','no_cond'])
     parser.add_argument('--piano_dim',type=int, default = PIANO_DIM)
     parser.add_argument('--note_channel',type=int, default = NOTE_CHANNEL)
@@ -178,45 +178,35 @@ def main():
 
 
     ##graph placeholders##
-    if args.if_cond == "cond":
-        if args.mode_choice=="bln_attn_fc":
-            network_input_plder= tf.placeholder(tf.float32,shape =(None, args.frame_size, args.piano_dim), name = "input_batch_rnn")
-            network_output_plder = tf.placeholder(tf.float32,shape =(None, 1, args.piano_dim-args.chord_channel), name = "output_batch_rnn")
-        elif args.mode_choice=="ad_rm2t" or args.mode_choice=="ad_rm2t_birnn":
-            network_input_plder= tf.placeholder(tf.float32,shape =(None, args.seq_len, args.piano_dim), name = "input_batch_rnn")
-            rm_time_plder = tf.placeholder(tf.float32,shape =(None, args.seq_len-args.frame_size, args.rhythm_channel), name = "rm_tm_rnn")
-            network_output_plder = tf.placeholder(tf.float32,shape =(None, args.seq_len-args.frame_size, args.piano_dim-args.chord_channel), name = "output_batch_rnn")
-        elif args.mode_choice=="ad_rm2t_fc":
-            network_input_plder= tf.placeholder(tf.float32,shape =(None, args.seq_len, args.piano_dim+args.chord_channel), name = "input_batch_rnn")
-            rm_time_plder = tf.placeholder(tf.float32,shape =(None, args.seq_len-args.frame_size, args.rhythm_channel), name = "rm_tm_rnn")
-            network_output_plder = tf.placeholder(tf.float32,shape =(None, args.seq_len-args.frame_size, args.piano_dim-args.chord_channel), name = "output_batch_rnn")
-        elif args.mode_choice=="ad_rm3t_fc" or args.mode_choice=="ad_rm3t_fc_rs":
-            network_input_plder= tf.placeholder(tf.float32,shape =(None, args.seq_len, args.piano_dim+args.chord_channel), name = "input_batch_rnn")
-            rm_time_plder = tf.placeholder(tf.float32,shape =(None, args.seq_len-args.big_frame_size, args.rhythm_channel), name = "rm_tm_rnn")
-            network_output_plder = tf.placeholder(tf.float32,shape =(None, args.seq_len-args.big_frame_size, args.piano_dim-args.chord_channel), name = "output_batch_rnn")
 
-    else:
-        if args.mode_choice=="nosamplernn":
-            network_input_plder= tf.placeholder(tf.float32,shape =(None, args.frame_size, args.piano_dim-args.chord_channel), name = "input_batch_rnn")
-            network_output_plder = tf.placeholder(tf.float32,shape =(None, 1, args.piano_dim-args.chord_channel), name = "output_batch_rnn")
-        elif args.mode_choice=="bar_note":
-            network_input_plder= tf.placeholder(tf.float32,shape =(None, args.seq_len, args.piano_dim-args.chord_channel), name = "input_batch_rnn")
-            #network_output_plder = tf.placeholder(tf.float32,shape =(None, args.seq_len-args.frame_size-args.big_frame_size, args.piano_dim-args.chord_channel), name = "output_batch_rnn")
-            network_output_plder = tf.placeholder(tf.float32,shape =(None, args.seq_len-args.big_frame_size, args.piano_dim-args.chord_channel), name = "output_batch_rnn")
+    if args.mode_choice=="bln_attn_fc":
+        network_input_plder= tf.placeholder(tf.float32,shape =(None, args.frame_size, args.piano_dim), name = "input_batch_rnn")
+        network_output_plder = tf.placeholder(tf.float32,shape =(None, 1, args.piano_dim-args.chord_channel), name = "output_batch_rnn")
+    elif args.mode_choice=="ad_rm2t" or args.mode_choice=="ad_rm2t_birnn":
+        network_input_plder= tf.placeholder(tf.float32,shape =(None, args.seq_len, args.piano_dim), name = "input_batch_rnn")
+        rm_time_plder = tf.placeholder(tf.float32,shape =(None, args.seq_len-args.frame_size, args.rhythm_channel), name = "rm_tm_rnn")
+        network_output_plder = tf.placeholder(tf.float32,shape =(None, args.seq_len-args.frame_size, args.piano_dim-args.chord_channel), name = "output_batch_rnn")
+    elif args.mode_choice=="ad_rm2t_fc":
+        network_input_plder= tf.placeholder(tf.float32,shape =(None, args.seq_len, args.piano_dim+args.chord_channel), name = "input_batch_rnn")
+        rm_time_plder = tf.placeholder(tf.float32,shape =(None, args.seq_len-args.frame_size, args.rhythm_channel), name = "rm_tm_rnn")
+        network_output_plder = tf.placeholder(tf.float32,shape =(None, args.seq_len-args.frame_size, args.piano_dim-args.chord_channel), name = "output_batch_rnn")
+    elif args.mode_choice=="ad_rm3t_fc" or args.mode_choice=="ad_rm3t_fc_rs":
+        network_input_plder= tf.placeholder(tf.float32,shape =(None, args.seq_len, args.piano_dim+args.chord_channel), name = "input_batch_rnn")
+        rm_time_plder = tf.placeholder(tf.float32,shape =(None, args.seq_len-args.big_frame_size, args.rhythm_channel), name = "rm_tm_rnn")
+        network_output_plder = tf.placeholder(tf.float32,shape =(None, args.seq_len-args.big_frame_size, args.piano_dim-args.chord_channel), name = "output_batch_rnn")
 
-        elif args.mode_choice=="note":
-            network_input_plder= tf.placeholder(tf.float32,shape =(None, args.seq_len, args.piano_dim-args.chord_channel), name = "input_batch_rnn")
-            network_output_plder = tf.placeholder(tf.float32,shape =(None, args.seq_len-args.frame_size, args.piano_dim-args.chord_channel), name = "output_batch_rnn")
-        elif args.mode_choice=="ad_rm2t":
-            network_input_plder= tf.placeholder(tf.float32,shape =(None, args.seq_len, args.piano_dim-args.chord_channel), name = "input_batch_rnn")
-            rm_time_plder = tf.placeholder(tf.float32,shape =(None, args.seq_len-args.frame_size, args.rhythm_channel), name = "rm_tm_rnn")
-            network_output_plder = tf.placeholder(tf.float32,shape =(None, args.seq_len-args.frame_size, args.piano_dim-args.chord_channel), name = "output_batch_rnn")
+    elif args.mode_choice=="3t_fc":
+        network_input_plder= tf.placeholder(tf.float32,shape =(None, args.seq_len, args.piano_dim+args.chord_channel), name = "input_batch_rnn")
+        network_output_plder = tf.placeholder(tf.float32,shape =(None, args.seq_len-args.big_frame_size, args.piano_dim-args.chord_channel), name = "output_batch_rnn")
+    elif args.mode_choice=="2t_fc":
+        network_input_plder= tf.placeholder(tf.float32,shape =(None, args.seq_len, args.piano_dim+args.chord_channel), name = "input_batch_rnn")
+        network_output_plder = tf.placeholder(tf.float32,shape =(None, args.seq_len-args.frame_size, args.piano_dim-args.chord_channel), name = "output_batch_rnn")
 
     ##build graph##
     with tf.variable_scope(tf.get_variable_scope(),reuse = tf.AUTO_REUSE):
         with tf.name_scope('TOWER_0') as scope:
 
-            if args.mode_choice=="note" or args.mode_choice=="nosamplernn" or args.mode_choice=="bar_note":
+            if args.mode_choice=="2t_fc" or args.mode_choice=="3t_fc":
                 (   gt,
                     pd,
                     loss
@@ -298,7 +288,7 @@ def main():
     reader.start_threads(sess)
     ####forward prop and gradient descent####
     try:
-        if args.mode_choice=="bar_note" or args.mode_choice=="note" or args.mode_choice=="nosamplernn":
+        if args.mode_choice=="2t_fc" or args.mode_choice=="3t_fc":
             X_val, y_val = reader.get_validation_data()
             print("fetched val data sucessfully", X_val.shape, y_val.shape)
             for step in range(saved_global_step + 1, args.num_steps):

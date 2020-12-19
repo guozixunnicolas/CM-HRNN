@@ -7,8 +7,8 @@ import numpy as np
 import tensorflow as tf
 import glob
 import argparse
-from .lookup_table import rhythm_to_index,decode_rhythm
-#from lookup_table import rhythm_to_index,decode_rhythm
+#from .lookup_table import rhythm_to_index,decode_rhythm
+from lookup_table import rhythm_to_index,decode_rhythm
 class AudioReader(object):
 
     def __init__(self,coord, args, queue_size=16):
@@ -29,24 +29,10 @@ class AudioReader(object):
         self.X = tf.placeholder(dtype=tf.float32, shape=None)
         self.Y = tf.placeholder(dtype=tf.float32, shape=None)
         self.rm_tm = tf.placeholder(dtype=tf.float32, shape=None)
-        if self.mode_choice=="bar_note" or self.mode_choice=="note" or self.mode_choice=="nosamplernn":
-            if self.if_cond:
-                self.queue = tf.PaddingFIFOQueue(
-                        capacity = queue_size, dtypes=[tf.float32, tf.float32], shapes=[(None, self.piano_dim), (None, self.piano_dim-self.chord_channel)])
-            else:
-                self.queue = tf.PaddingFIFOQueue(
-                    capacity = queue_size, dtypes=[tf.float32, tf.float32], shapes=[(None, self.piano_dim-self.chord_channel), (None, self.piano_dim-self.chord_channel)])  
-            
+        if self.mode_choice=="2t_fc" or self.mode_choice=="3t_fc" or self.mode_choice =="bln_attn_fc":
+            self.queue = tf.PaddingFIFOQueue(
+                        capacity = queue_size, dtypes=[tf.float32, tf.float32], shapes=[(None, self.piano_dim+self.chord_channel), (None, self.piano_dim-self.chord_channel)])
             self.enqueue = self.queue.enqueue([self.X, self.Y])
-        elif self.mode_choice=="ad_rm2t" or self.mode_choice=="ad_rm3t" or self.mode_choice=="ad_rm2t_birnn":
-            if self.if_cond:
-                self.queue = tf.PaddingFIFOQueue(
-                        capacity = queue_size, dtypes=[tf.float32, tf.float32, tf.float32], shapes=[(None, self.piano_dim), (None, self.piano_dim-self.chord_channel), (None, self.rhythm_channel)])
-            else:
-                self.queue = tf.PaddingFIFOQueue(
-                    capacity = queue_size, dtypes=[tf.float32, tf.float32, tf.float32], shapes=[(None, self.piano_dim-self.chord_channel), (None, self.piano_dim-self.chord_channel), (None, self.rhythm_channel)])  
-            
-            self.enqueue = self.queue.enqueue([self.X, self.Y, self.rm_tm])
         elif self.mode_choice =="ad_rm2t_fc" or self.mode_choice =="ad_rm3t_fc_rs" or self.mode_choice =="ad_rm3t_fc":
             self.queue = tf.PaddingFIFOQueue(
                     capacity = queue_size, dtypes=[tf.float32, tf.float32, tf.float32], shapes=[(None, self.piano_dim+self.chord_channel), (None, self.piano_dim-self.chord_channel), (None, self.rhythm_channel)])
@@ -297,6 +283,30 @@ class AudioReader(object):
                 ground_truth_tmp.append(gt)
             X_y_lst = zip(seq_list_tmp, ground_truth_tmp)
             all_xy_lst.extend(X_y_lst)
+
+      
+        elif self.mode_choice=="bln_attn_fc":
+            num_iter = audio.shape[0]-self.frame_size 
+            seq_list_tmp = [] 
+            ground_truth_tmp = []
+            rest_chord = np.zeros((1,self.chord_channel))
+            rest_chord[:,0] = 1
+
+            all_chords_for_audio = audio[:,self.bar_channel:self.bar_channel+self.chord_channel] #(len, chord_dim)
+            shifted_chord = np.concatenate((all_chords_for_audio[1:,:],rest_chord),axis = 0) 
+            audio_with_fc_chord = np.concatenate((audio[:,:self.bar_channel],shifted_chord,audio[:,self.bar_channel:]),axis = -1)
+
+            for i in range(num_iter):
+                seq = audio_with_fc_chord[ i:i+self.frame_size, :]
+                seq_list_tmp.append(seq)  
+                if self.if_cond:
+                    gt = np.delete([audio[ i+self.frame_size, :]],np.s_[self.bar_channel:self.bar_channel+self.chord_channel],axis=1)
+                else:
+                    gt = [audio[ i+self.frame_size, :]]
+                ground_truth_tmp.append(gt)
+
+            X_y_lst = zip(seq_list_tmp, ground_truth_tmp)
+            all_xy_lst.extend(X_y_lst)     
         elif self.mode_choice=="ad_rm2t_fc":
             for i in range(len(audio)):
                 if np.argmax(audio[i][:self.bar_channel])==1:
@@ -314,9 +324,7 @@ class AudioReader(object):
                 all_chords_forX = X[:,self.bar_channel:self.bar_channel+self.chord_channel] #(len, chord_dim)
                 shifted_chord = np.concatenate((all_chords_forX[1:,:],rest_chord),axis = 0) 
                 X_with_fc_chord = np.concatenate((X[:,:self.bar_channel],shifted_chord,X[:,self.bar_channel:]),axis = -1)
-                print("X_with_fc_chord",X_with_fc_chord.shape)
-                print("all_chords_forX",all_chords_forX.shape)
-                print("shifted_chord",shifted_chord.shape)
+
                 y = X[self.frame_size:,:]
                 gt = np.delete(y,np.s_[self.bar_channel:self.bar_channel+self.chord_channel],axis=1)
                 #process remaining time lst
@@ -360,7 +368,65 @@ class AudioReader(object):
                 audio = audio[self.seq_len:, :]
             X_y_lst = zip(seq_list_tmp, ground_truth_tmp, rm_tm_tmp) #[(X,y,z), (X,y,z) ]
             all_xy_lst.extend(X_y_lst)
-          
+        elif self.mode_choice=="2t_fc":
+            for i in range(len(audio)):
+                if np.argmax(audio[i][:self.bar_channel])==1:
+                    trim_index = i
+                    break
+            audio = audio[trim_index:]
+
+            seq_list_tmp = [] 
+            ground_truth_tmp = []
+            rest_chord = np.zeros((1,self.chord_channel))
+            rest_chord[:,0] = 1
+
+            all_chords_for_audio = audio[:,self.bar_channel:self.bar_channel+self.chord_channel] #(len, chord_dim)
+            shifted_chord = np.concatenate((all_chords_for_audio[1:,:],rest_chord),axis = 0) 
+            audio_with_fc_chord = np.concatenate((audio[:,:self.bar_channel],shifted_chord,audio[:,self.bar_channel:]),axis = -1)
+
+
+            while len(audio) >= self.seq_len:
+                X = audio[:self.seq_len, :]
+                X_with_fc_chord = audio_with_fc_chord[:self.seq_len, :]
+
+                y = X[self.frame_size:,:]
+                gt = np.delete(y,np.s_[self.bar_channel:self.bar_channel+self.chord_channel],axis=1)
+                seq_list_tmp.append(X_with_fc_chord)  
+                ground_truth_tmp.append(gt)
+                audio = audio[self.seq_len:, :]
+            X_y_lst = zip(seq_list_tmp, ground_truth_tmp) #[(X,y,z), (X,y,z) ]
+            all_xy_lst.extend(X_y_lst) 
+        elif self.mode_choice=="3t_fc":
+            #make sure data starts with a bar event
+            for i in range(len(audio)):
+                if np.argmax(audio[i][:self.bar_channel])==1:
+                    #print("is bar",audio[i][:self.bar_channel])
+                    trim_index = i
+                    break
+            audio = audio[trim_index:]
+
+            seq_list_tmp = [] 
+            ground_truth_tmp = []
+            rest_chord = np.zeros((1,self.chord_channel))
+            rest_chord[:,0] = 1
+            while len(audio) >= self.seq_len:
+                #make sure X starts with a bar event
+                X = audio[:self.seq_len, :]
+                all_chords_forX = X[:,self.bar_channel:self.bar_channel+self.chord_channel] #(len, chord_dim)
+                shifted_chord = np.concatenate((all_chords_forX[1:,:],rest_chord),axis = 0) 
+                X_with_fc_chord = np.concatenate((X[:,:self.bar_channel],shifted_chord,X[:,self.bar_channel:]),axis = -1)
+
+                #y is okay, no pre-process needed
+                y = X[self.big_frame_size:,:]
+                gt = np.delete(y,np.s_[self.bar_channel:self.bar_channel+self.chord_channel],axis=1)
+                seq_list_tmp.append(X_with_fc_chord)  
+                ground_truth_tmp.append(gt)
+                #process remaining time lst
+                audio = audio[self.seq_len:, :]
+            X_y_lst = zip(seq_list_tmp, ground_truth_tmp) #[(X,y,z), (X,y,z) ]
+            all_xy_lst.extend(X_y_lst)
+
+
         return all_xy_lst
     def thread_main2(self, sess):
         stop = False
@@ -373,14 +439,14 @@ class AudioReader(object):
             all_xyz_lst = self.prepare_all_data(npy_file, all_xyz_lst)
         
         while not stop:
-            if self.mode_choice=="bar_note" or self.mode_choice=="note" or self.mode_choice=="nosamplernn": 
+            if self.mode_choice=="2t_fc" or self.mode_choice=="3t_fc" or self.mode_choice=="bln_attn_fc": 
                 for xy in all_xyz_lst:
                     if self.coord.should_stop():
                         stop = True
                         break
                     sess.run(self.enqueue,feed_dict={self.X: xy[0], self.Y: xy[1]})  
 
-            elif self.mode_choice=="ad_rm2t" or self.mode_choice=="ad_rm3t" or self.mode_choice=="ad_rm2t_birnn" or self.mode_choice=="ad_rm2t_fc" or self.mode_choice=="ad_rm3t_fc_rs" or self.mode_choice=="ad_rm3t_fc":
+            elif self.mode_choice=="ad_rm2t_fc" or self.mode_choice=="ad_rm3t_fc_rs" or self.mode_choice=="ad_rm3t_fc":
 
                 for xyz in all_xyz_lst:
                     if self.coord.should_stop():
@@ -406,12 +472,12 @@ class AudioReader(object):
             all_xyz_lst = self.prepare_all_data(npy_file, all_xyz_lst)
 
 
-        if self.mode_choice=="bar_note" or self.mode_choice=="note" or self.mode_choice=="nosamplernn":
+        if self.mode_choice=="3t_fc" or self.mode_choice=="2t_fc" or self.mode_choice=="bln_attn_fc":
             X_lst, y_lst = zip(*all_xyz_lst)
             X = np.stack(X_lst, axis = 0)
             y = np.stack(y_lst, axis = 0)
             return X, y
-        elif self.mode_choice=="ad_rm2t" or self.mode_choice=="ad_rm3t" or self.mode_choice=="ad_rm2t_birnn" or self.mode_choice=="ad_rm2t_fc" or self.mode_choice=="ad_rm3t_fc_rs" or self.mode_choice=="ad_rm3t_fc":
+        elif self.mode_choice=="ad_rm2t_fc" or self.mode_choice=="ad_rm3t_fc_rs" or self.mode_choice=="ad_rm3t_fc":
             X_lst, y_lst,z_lst = zip(*all_xyz_lst)
             X = np.stack(X_lst, axis = 0)
             y = np.stack(y_lst, axis = 0)
@@ -428,7 +494,7 @@ if __name__=='__main__':
     parser.add_argument('--big_frame_size',   type=int, default = 32)
     parser.add_argument('--frame_size',       type=int, default = 16)
 
-    parser.add_argument('--mode_choice', choices=['bar_note', 'nosamplernn','note',"ad_rm2t", "ad_rm3t","ad_rm2t_fc", "ad_rm3t_fc","ad_rm3t_fc_rs"], type = str,default="ad_rm3t_fc")
+    parser.add_argument('--mode_choice', choices=["ad_rm2t_birnn","ad_rm2t_fc","ad_rm3t_fc","ad_rm3t_fc_rs","bln_attn_fc","2t_fc","3t_fc"], type = str,default="2t_fc")
     parser.add_argument('--if_cond',type=str, choices=['cond','no_cond'], default = "cond")
     parser.add_argument('--note_channel',type=int, default = 130)
     parser.add_argument('--rhythm_channel',type=int, default = 16)
@@ -452,7 +518,7 @@ if __name__=='__main__':
     print('threads started')
     audio_batch = reader.dequeue(4)
     print('deququed')
-    if args.mode_choice=="bar_note" or args.mode_choice=="note" or args.mode_choice=="nosamplernn":
+    if args.mode_choice=="2t_fc" or args.mode_choice=="3t_fc" or args.mode_choice=="bln_attn_fc":
         X_train, y_train = sess.run(audio_batch)
         X, y = reader.get_validation_data()
         print("dadasdas",X_train.shape, y_train.shape)
@@ -462,6 +528,6 @@ if __name__=='__main__':
         X, y,rm_time_val = reader.get_validation_data()
         print(X_train.shape, y_train.shape,rm_time.shape)
         print(X.shape, y.shape,rm_time_val.shape)
-        np.save("X.npy",X_train)
+        """np.save("X.npy",X_train)
         np.save("y.npy",y_train)
-        np.save("rm.npy",rm_time)      
+        np.save("rm.npy",rm_time)  """    
