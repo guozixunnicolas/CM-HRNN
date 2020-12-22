@@ -180,8 +180,8 @@ def main():
     ##graph placeholders##
 
     if args.mode_choice=="bln_attn_fc":
-        network_input_plder= tf.placeholder(tf.float32,shape =(None, args.frame_size, args.piano_dim), name = "input_batch_rnn")
-        network_output_plder = tf.placeholder(tf.float32,shape =(None, 1, args.piano_dim-args.chord_channel), name = "output_batch_rnn")
+        network_input_plder= tf.placeholder(tf.float32,shape =(None, args.seq_len, args.piano_dim+args.chord_channel), name = "input_batch_rnn")
+        network_output_plder = tf.placeholder(tf.float32,shape =(None, args.seq_len, args.piano_dim-args.chord_channel), name = "output_batch_rnn")
     elif args.mode_choice=="ad_rm2t" or args.mode_choice=="ad_rm2t_birnn":
         network_input_plder= tf.placeholder(tf.float32,shape =(None, args.seq_len, args.piano_dim), name = "input_batch_rnn")
         rm_time_plder = tf.placeholder(tf.float32,shape =(None, args.seq_len-args.frame_size, args.rhythm_channel), name = "rm_tm_rnn")
@@ -206,7 +206,7 @@ def main():
     with tf.variable_scope(tf.get_variable_scope(),reuse = tf.AUTO_REUSE):
         with tf.name_scope('TOWER_0') as scope:
 
-            if args.mode_choice=="2t_fc" or args.mode_choice=="3t_fc":
+            if args.mode_choice=="2t_fc" or args.mode_choice=="3t_fc" or args.mode_choice=="bln_attn_fc":
                 (   gt,
                     pd,
                     loss
@@ -288,7 +288,7 @@ def main():
     reader.start_threads(sess)
     ####forward prop and gradient descent####
     try:
-        if args.mode_choice=="2t_fc" or args.mode_choice=="3t_fc":
+        if args.mode_choice=="2t_fc" or args.mode_choice=="3t_fc" or args.mode_choice=="bln_attn_fc":
             X_val, y_val = reader.get_validation_data()
             print("fetched val data sucessfully", X_val.shape, y_val.shape)
             for step in range(saved_global_step + 1, args.num_steps):

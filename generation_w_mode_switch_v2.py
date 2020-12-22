@@ -123,7 +123,7 @@ class define_placeholder(object):
         self.infe_para = dict()
         if not net.if_cond:
             self.inpt_lst_dim = net.piano_dim - net.chord_channel
-        elif net.mode_choice=="ad_rm2t_fc" or net.mode_choice=="ad_rm3t_fc"or net.mode_choice=="ad_rm3t_fc_rs":
+        elif net.mode_choice=="ad_rm2t_fc" or net.mode_choice=="ad_rm3t_fc"or net.mode_choice=="ad_rm3t_fc_rs" or net.mode_choice=="bln_attn_fc":
             self.inpt_lst_dim = net.piano_dim + net.chord_channel
         self.infe_para['infe_big_frame_state'] = net.big_frame_cell.zero_state(net.batch_size,tf.float32) #pay attention here
 
@@ -144,7 +144,13 @@ class define_placeholder(object):
         self.infe_para['infe_frame_outp_slices'] = tf.placeholder(tf.float32, name = "infe_frame_outp_slices",shape = [net.batch_size,1,net.dim])
 
         self.infe_para['infe_rm_tm'] = tf.placeholder(tf.float32, name = "infe_rm_tm",shape = [net.batch_size,1,net.rhythm_channel])
-   
+        
+        self.infe_para['bln_ipt'] = tf.placeholder(tf.float32, name = "infe_bln_ipt",shape = [net.batch_size,1,net.piano_dim+net.chord_channel])
+
+        #self.infe_para['bln_out'] = tf.placeholder(tf.float32, name = "infe_bln_out",shape = [net.batch_size,1,net.rhythm_channel+net.note_channel])
+
+        self.infe_para['bln_state'] = net.sample_cell.zero_state(net.batch_size,tf.float32)
+
         print("initialize placeholder", self.infe_para['infe_big_frame_state'],self.infe_para['infe_big_frame_inp'] ,self.infe_para['infe_big_frame_outp'])
 
 def choose_from_distribution(preds, temperature=1.0):
@@ -313,6 +319,22 @@ def create_graph_ad_rm2t_fc(net):
         infe_para['bar'] = tf.nn.softmax(sample_out[:, :net.bar_channel])
         return infe_para
 
+def create_graph_bln_attn_fc(net):
+    with tf.name_scope('infe_para'):
+        infe_para = define_placeholder(net).infe_para
+
+        tf.get_variable_scope().reuse_variables()
+
+        sample_out, infe_para['bln_next_state'] = net.bln_attn(baseline_input = infe_para['bln_ipt'], baseline_state = infe_para['bln_state'])
+        sample_out = tf.reshape(
+            sample_out,
+            [-1, net.piano_dim -net.chord_channel]
+        )
+        infe_para['note'] = tf.nn.softmax(sample_out[:, net.bar_channel+net.rhythm_channel:])
+        infe_para['rhythm'] = tf.nn.softmax(sample_out[:, net.bar_channel:net.bar_channel+net.rhythm_channel])
+        infe_para['bar'] = tf.nn.softmax(sample_out[:, :net.bar_channel])
+        return infe_para
+
 def create_graph_ad_rm3t_fc(net, if_residual):
     with tf.name_scope('infe_para'):
         infe_para = define_placeholder(net).infe_para
@@ -396,7 +418,7 @@ def forward_prop(net, infe_para, sess, condition, condition_name, gen_dir,args,s
     samples = np.zeros((net.batch_size, LENGTH, net.piano_dim+net.chord_channel), dtype='float32')
     samples[:, :seed_length, :] = original_file[:,:seed_length, :]
     #run graph based on model choice
-    final_big_s, final_s= sess.run([net.big_frame_init, net.frame_init])
+    final_big_s, final_s, bln_s= sess.run([net.big_frame_init, net.frame_init, net.sample_init])
     if mode_choice == "ad_rm2t_fc":
         for t in range(net.frame_size, LENGTH):
             # frame level
@@ -456,6 +478,20 @@ def forward_prop(net, infe_para, sess, condition, condition_name, gen_dir,args,s
                             infe_para['infe_sample_inp']: sample_input_sequences,
                             infe_para['infe_rm_tm']:rm_tm_array} )
             samples[:, t] = sample_from_distrubution(net,args,sample_out_note_distribution, rhythm_out_distribution,bar_out_distribution, chord_this_time = original_file[:, t, net.bar_channel:net.bar_channel+2*net.chord_channel])
+    elif mode_choice == "bln_attn_fc":
+        for t in range(LENGTH):
+
+            # sample level
+            sample_input = samples[:, t, :]
+            sample_input = np.expand_dims(sample_input, axis = 1)
+
+            sample_out_note_distribution, rhythm_out_distribution, bar_out_distribution, bln_s= sess.run(
+                [infe_para['note'],infe_para["rhythm"],infe_para["bar"],infe_para['bln_next_state']
+                ],
+                feed_dict={infe_para['bln_ipt']: sample_input,
+                           infe_para['bln_state']: bln_s} )
+            if t>=net.frame_size:#when t == 16, update; 0-15, keep ori
+                samples[:, t] = sample_from_distrubution(net,args,sample_out_note_distribution, rhythm_out_distribution,bar_out_distribution, chord_this_time = original_file[:, t, net.bar_channel:net.bar_channel+2*net.chord_channel])
 
     data_genre = args.logdir_root.split("/")[-2] #08_16_2020_03_31_10_Jazz_npy
     ckpt = args.logdir_root.split("/")[-1].split("-")[-1] #100000
@@ -500,6 +536,8 @@ def main():
         elif mod_arg.mode_choice=="ad_rm2t_fc" :
             rm_time_plder = tf.placeholder(tf.float32,shape =(None, mod_arg.seq_len-mod_arg.frame_size, mod_arg.rhythm_channel), name = "rm_tm_rnn")
             network_output_plder = tf.placeholder(tf.float32,shape =(None, mod_arg.seq_len-mod_arg.frame_size, mod_arg.piano_dim-mod_arg.chord_channel), name = "output_batch_rnn")
+        elif mod_arg.mode_choice=="bln_attn_fc":
+            network_output_plder = tf.placeholder(tf.float32,shape =(None, mod_arg.seq_len, mod_arg.piano_dim-mod_arg.chord_channel), name = "output_batch_rnn")
 
     else:
         if mod_arg.mode_choice=="ad_rm2t":
@@ -510,7 +548,7 @@ def main():
     ##build graph##
     with tf.variable_scope(tf.get_variable_scope(),reuse = tf.AUTO_REUSE):
         with tf.name_scope('TOWER_0') as scope:
-            if mod_arg.mode_choice=="note" or mod_arg.mode_choice=="nosamplernn" or mod_arg.mode_choice=="bar_note":
+            if mod_arg.mode_choice=="2t_fc" or mod_arg.mode_choice=="3t_fc" or mod_arg.mode_choice=="bln_attn_fc":
                 (   gt,
                     pd,
                     loss
@@ -540,6 +578,8 @@ def main():
         graph= create_graph_ad_rm3t_fc(net, if_residual = False)
     elif mod_arg.mode_choice =="ad_rm3t_fc_rs":
         graph= create_graph_ad_rm3t_fc(net, if_residual = True)    
+    if mod_arg.mode_choice =="bln_attn_fc":
+        graph= create_graph_bln_attn_fc(net)
     #graph_one_tier = create_graph_one_tier(net)
     #
     logdir = args.logdir_root

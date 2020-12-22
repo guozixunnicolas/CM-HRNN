@@ -33,9 +33,7 @@ class SampleRnnModel_w_mode_switch(object):
         elif args.if_cond=="no_cond":
             self.if_cond = False
             print("model setting: unconditional")
-        """print(self.batch_size, self.big_frame_size,self.frame_size,self.rnn_type,
-              self.dim,self.piano_dim,self.n_rnn,self.seq_len,self.mode_choice, 
-              self.note_channel,self.rhythm_channel,self.chord_channel,self.bar_channel)"""
+
         def single_cell(if_attention = False, atten_len = None):
             if self.rnn_type =="GRU":
                 cell = tf.contrib.rnn.GRUCell(self.dim)
@@ -49,7 +47,10 @@ class SampleRnnModel_w_mode_switch(object):
             elif self.rnn_type =="LSTM":
                 print("yeah lstm")
                 cell = tf.contrib.rnn.BasicLSTMCell(self.dim)
-                #cell = tf.contrib.rnn.AttentionCellWrapper(cell, attn_length=2)
+                if if_attention == True:
+                    print("with fucking attention")
+                    cell = tf.contrib.rnn.AttentionCellWrapper(cell, attn_length=atten_len)
+
                 if self.if_train:
                     cell = tf.contrib.rnn.DropoutWrapper(cell,output_keep_prob=self.drop_out_keep_prob)
                 return cell
@@ -67,15 +68,13 @@ class SampleRnnModel_w_mode_switch(object):
 
                 return cell
         if self.n_rnn > 1:
-            #self.sample_cell = tf.contrib.rnn.MultiRNNCell([single_cell(if_attention = True, atten_len = 8) for _ in range(self.n_rnn)])
-            self.sample_cell = tf.contrib.rnn.MultiRNNCell([single_cell() for _ in range(self.n_rnn)])
+            self.sample_cell = tf.contrib.rnn.MultiRNNCell([single_cell(if_attention = True, atten_len = self.frame_size) for _ in range(self.n_rnn)])
             self.frame_cell = tf.contrib.rnn.MultiRNNCell([single_cell() for _ in range(self.n_rnn)])
             self.big_frame_cell = tf.contrib.rnn.MultiRNNCell([single_cell() for _ in range(self.n_rnn)])
             self.birnn_fwcell = single_birnncell()
             self.birnn_bwcell = single_birnncell()
         else:
-            #self.sample_cell = single_cell(if_attention = True, atten_len = 4)
-            self.sample_cell = single_cell()
+            self.sample_cell = single_cell(if_attention = True, atten_len = self.frame_size)
             self.frame_cell = single_cell()
             self.big_frame_cell = single_cell()
             self.birnn_fwcell = single_birnncell()
@@ -261,6 +260,17 @@ class SampleRnnModel_w_mode_switch(object):
         
         return sample_outputs_logits  #return (batch, pred_length, piano_dim)
 
+    def bln_attn(self, baseline_input, baseline_state = None):
+        with tf.variable_scope("baseline"):
+            if baseline_state is not None: #during generation
+                bln_outputs_all, baseline_last_state = tf.nn.dynamic_rnn(self.sample_cell, baseline_input,initial_state = baseline_state, dtype=tf.float32)
+
+            else: #during training
+                bln_outputs_all, baseline_last_state = tf.nn.dynamic_rnn(self.sample_cell, baseline_input, dtype=tf.float32) #batch, no_chunks, dim
+
+            baseline_outputs_all_stps = self.weight_bias(bln_outputs_all, self.piano_dim-self.chord_channel ,"dense_weights_bln")
+        return baseline_outputs_all_stps, baseline_last_state
+
     def birnn(self, all_chords):
         
         outputs_tuple,_ = tf.nn.bidirectional_dynamic_rnn(cell_fw = self.birnn_fwcell, cell_bw = self.birnn_bwcell,inputs = all_chords, dtype=tf.float32)
@@ -305,6 +315,17 @@ class SampleRnnModel_w_mode_switch(object):
         sample_logits= self.sample_level(sample_input, frame_output = frame_outputs)
         return sample_logits
 
+    def _create_network_2t_fc(self, one_t_input):
+        print("####MODEL:BAR...####")
+        sample_input = one_t_input[:,:-1,:]
+ 
+        frame_input = one_t_input[:, :-self.frame_size,:] 
+
+        ##frame_level##
+        frame_outputs , final_frame_state = self.frame_level(frame_input)
+        ##sample_level## 
+        sample_logits= self.sample_level(sample_input, frame_output = frame_outputs)
+        return sample_logits
 
     def _create_network_noSampleRnn(self, baseline_input):
 
@@ -402,24 +423,9 @@ class SampleRnnModel_w_mode_switch(object):
             sample_logits= self.sample_level(sample_input, frame_output = frame_outputs, rm_time = remaining_time_input)
 
             return sample_logits
-    """def _create_network_ad_rm3t_fc_rs(self, two_t_input,rm_tm):
-        with tf.name_scope('SampleRnn_net'):
-
-            sample_input = two_t_input[:,self.big_frame_size-self.frame_size:-1,:]
-
-            frame_input = two_t_input[:, self.big_frame_size-self.frame_size:-self.frame_size,:] 
-
-            big_frame_input = two_t_input[:,:-self.big_frame_size,:]  
-
-            big_frame_outputs , final_big_frame_state = self.big_frame_level(big_frame_input)
-
-            frame_outputs , final_frame_state = self.frame_level_residual(frame_input, bigframe_output = big_frame_outputs)
-
-            remaining_time_input = rm_tm #(batch, seq-frame_size, piano_dim)
-            ##sample_level## 
-            sample_logits= self.sample_level(sample_input, frame_output = frame_outputs, rm_time = remaining_time_input)
-
-            return sample_logits"""
+    def _create_network_bln_attn_fc(self, baseline_input):
+        bln_outputs_logits,_ = self.bln_attn(baseline_input)
+        return bln_outputs_logits
     def loss_SampleRnn(self, X,y, rm_time = None,l2_regularization_strength=None, name='sample'):
         """ nosamplernn: X: (batch, frame_size, dim), Y:(batch, 1, dim)
             barnote: X(batch, seq_len, dim), Y:(batch, seq_len-frame-big_frame, dim)
@@ -459,7 +465,13 @@ class SampleRnnModel_w_mode_switch(object):
                 pd = pred_logits                 
             elif self.mode_choice=="ad_rm3t_fc_rs":  
                 pred_logits= self._create_network_ad_rm3t_fc(two_t_input = self.X, rm_tm = self.rm_time, if_rs = True) #(batch* seq_len-frame, self.note + self.rhythm)
-                pd = pred_logits                            
+                pd = pred_logits    
+            elif self.mode_choice=="bln_attn_fc":  
+                pred_logits= self._create_network_bln_attn_fc(baseline_input = self.X) #(batch* seq_len-frame, self.note + self.rhythm)
+                pd = pred_logits       
+            elif self.mode_choice=="2t_fc":  
+                pred_logits= self._create_network_2t_fc(one_t_input = self.X) #(batch* seq_len-frame, self.note + self.rhythm)
+                pd = pred_logits                                   
             gt_bar = self.y[:, :, :self.bar_channel]
             gt_sustain = self.y[:, :, self.bar_channel : self.bar_channel+self.rhythm_channel]
             gt_note = self.y[:,:, self.bar_channel+self.rhythm_channel:]
