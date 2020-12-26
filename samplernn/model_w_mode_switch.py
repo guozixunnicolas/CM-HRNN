@@ -98,7 +98,15 @@ class SampleRnnModel_w_mode_switch(object):
             out = tf.add(tf.matmul(tensor_in, W), b)
             #print("tensor in:{}, W:{}, b:{}, out:{}".format(tensor_in.shape, W.shape, b.shape, out.shape))
         return out
+    def birnn(self, all_chords):
+        
+        outputs_tuple,_ = tf.nn.bidirectional_dynamic_rnn(cell_fw = self.birnn_fwcell, cell_bw = self.birnn_bwcell,inputs = all_chords, dtype=tf.float32)
 
+        #outputs_tuple,_ = tf.nn.bidirectional_dynamic_rnn(cell_fw = forward_cell, cell_bw = backward_cell,inputs = all_chords, dtype=tf.float32)
+        outputs = tf.concat([outputs_tuple[0],outputs_tuple[1]], axis = -1)
+        #all_chords_birnn = self.weight_bias(outputs, 2*self.chord_channel ,"birnn_weights_3") 
+        all_chords_birnn = self.weight_bias(outputs, self.chord_channel ,"birnn_weights_3") 
+        return all_chords_birnn
     
     def big_frame_level(self, big_frame_input, big_frame_state = None):
  
@@ -119,32 +127,6 @@ class SampleRnnModel_w_mode_switch(object):
                                         self.dim]) #(batch, no_frame_chunks*ratio, dim)
 
             return big_frame_outputs, big_frame_last_state            
-
-
-    def frame_level(self, frame_input, frame_state = None ,bigframe_output = None):
-        frame_input_chunks = tf.reshape(frame_input,[-1, #batch
-                                                    int(frame_input.shape[1]) // self.frame_size, #no_of_chunks 
-                                                    self.frame_size*int(frame_input.shape[-1])]) #frame_size*merged_dim
-        print("input chunk shape",frame_input_chunks)
-        with tf.variable_scope("FRAME_RNN"):
-            
-            """if bigframe_output is not None:
-                frame_input_chunks = self.weight_bias(frame_input_chunks, self.dim, 'emb_frame_chunks')
-                frame_input_chunks += bigframe_output #batch, no_chunk, dim + batch, no_chunk, dim """        
-            
-            
-            if frame_state is not None: #during generation
-                frame_outputs_all_stps, frame_last_state = tf.nn.dynamic_rnn(self.frame_cell, frame_input_chunks,initial_state = frame_state, dtype=tf.float32)
-            else: #during training
-                frame_outputs_all_stps, frame_last_state = tf.nn.dynamic_rnn(self.frame_cell, frame_input_chunks, dtype=tf.float32)
-            if bigframe_output is not None:
-                frame_outputs_all_stps += bigframe_output #batch, no_chunk, dim + batch, no_chunk, dim
-            frame_outputs_all_upsample = self.weight_bias(frame_outputs_all_stps, self.dim*self.frame_size, 'emb_frame_proj')
-            frame_outputs = tf.reshape(frame_outputs_all_upsample,
-                                       [tf.shape(frame_outputs_all_upsample)[0],
-                                        tf.shape(frame_outputs_all_upsample)[1] * self.frame_size,
-                                        self.dim]) #(batch, n_frame*frame_size, dim)
-            return frame_outputs, frame_last_state    
 
     def frame_level_switch(self, frame_input, frame_state = None ,bigframe_output = None, if_rs = True):
         frame_input_chunks = tf.reshape(frame_input,[-1, #batch
@@ -169,53 +151,7 @@ class SampleRnnModel_w_mode_switch(object):
                                         tf.shape(frame_outputs_all_upsample)[1] * self.frame_size,
                                         self.dim]) #(batch, n_frame*frame_size, dim)
             return frame_outputs, frame_last_state                
-       
         
-    def frame_level_before(self, frame_input, frame_state = None ,bigframe_output = None):
-        frame_input_chunks = tf.reshape(frame_input,[-1, #batch
-                                                    int(frame_input.shape[1]) // self.frame_size, #no_of_chunks 
-                                                    self.frame_size*int(frame_input.shape[-1])]) #frame_size*merged_dim
-        with tf.variable_scope("FRAME_RNN"):
-            
-            if bigframe_output is not None:
-                frame_input_chunks = self.weight_bias(frame_input_chunks, self.dim, 'emb_frame_chunks')
-                frame_input_chunks += bigframe_output #batch, no_chunk, dim + batch, no_chunk, dim      
-            
-            if frame_state is not None: #during generation
-                frame_outputs_all_stps, frame_last_state = tf.nn.dynamic_rnn(self.frame_cell, frame_input_chunks,initial_state = frame_state, dtype=tf.float32)
-            else: #during training
-                frame_outputs_all_stps, frame_last_state = tf.nn.dynamic_rnn(self.frame_cell, frame_input_chunks, dtype=tf.float32)
-            #if bigframe_output is not None:
-            #    frame_outputs_all_stps += bigframe_output #batch, no_chunk, dim + batch, no_chunk, dim
-            frame_outputs_all_upsample = self.weight_bias(frame_outputs_all_stps, self.dim*self.frame_size, 'emb_frame_proj')
-            frame_outputs = tf.reshape(frame_outputs_all_upsample,
-                                       [tf.shape(frame_outputs_all_upsample)[0],
-                                        tf.shape(frame_outputs_all_upsample)[1] * self.frame_size,
-                                        self.dim]) #(batch, n_frame*frame_size, dim)
-            return frame_outputs, frame_last_state                
-
-    def frame_level_residual(self, frame_input, frame_state = None ,bigframe_output = None):
-        frame_input_chunks = tf.reshape(frame_input,[-1, #batch
-                                                    int(frame_input.shape[1]) // self.frame_size, #no_of_chunks 
-                                                    self.frame_size*int(frame_input.shape[-1])]) #frame_size*merged_dim
-        with tf.variable_scope("FRAME_RNN"):
-            
-            if bigframe_output is not None:
-                frame_input_chunks = self.weight_bias(frame_input_chunks, self.dim, 'emb_frame_chunks')
-                frame_input_chunks += bigframe_output #batch, no_chunk, dim + batch, no_chunk, dim      
-            
-            if frame_state is not None: #during generation
-                frame_outputs_all_stps, frame_last_state = tf.nn.dynamic_rnn(self.frame_cell, frame_input_chunks,initial_state = frame_state, dtype=tf.float32)
-            else: #during training
-                frame_outputs_all_stps, frame_last_state = tf.nn.dynamic_rnn(self.frame_cell, frame_input_chunks, dtype=tf.float32)
-            if bigframe_output is not None:
-                frame_outputs_all_stps += bigframe_output #batch, no_chunk, dim + batch, no_chunk, dim
-            frame_outputs_all_upsample = self.weight_bias(frame_outputs_all_stps, self.dim*self.frame_size, 'emb_frame_proj')
-            frame_outputs = tf.reshape(frame_outputs_all_upsample,
-                                       [tf.shape(frame_outputs_all_upsample)[0],
-                                        tf.shape(frame_outputs_all_upsample)[1] * self.frame_size,
-                                        self.dim]) #(batch, n_frame*frame_size, dim)
-            return frame_outputs, frame_last_state  
     def sample_level(self, sample_input_sequences, frame_output = None, rm_time=None):
         
         sample_filter_shape = [self.frame_size, sample_input_sequences.shape[-1], self.dim]
@@ -233,24 +169,6 @@ class SampleRnnModel_w_mode_switch(object):
             logits = mlp_out+frame_output
         if rm_time is not None:
             logits = tf.concat([logits, rm_time],axis = -1)
-
-        
-
-        """sample_filter_shape = [self.frame_size, sample_input_sequences.shape[-1], sample_input_sequences.shape[-1]]
-        ones= tf.ones(sample_filter_shape,dtype="float32")     
-        same_filter= tf.diag(ones)
-        print("same filter",same_filter.shape)
-        mlp_out = tf.nn.conv1d(sample_input_sequences,
-                            same_filter,
-                            stride=1,
-                            padding="VALID",
-                            name="same_conv") #(batch, seqlen-framesize, dim)
-        print("mlp_out shape",mlp_out.shape,sample_input_sequences)
-        sample_outputs_all, sample_state_new = tf.nn.dynamic_rnn(self.sample_cell, mlp_out,
-                                   dtype=tf.float32)        
-        if frame_output is not None:
-            logits = sample_outputs_all+frame_output"""
-
 
         sample_outputs = self.weight_bias(logits, self.piano_dim-self.chord_channel ,"dense_weights_0") 
         sample_outputs = tf.nn.relu(sample_outputs)
@@ -271,50 +189,6 @@ class SampleRnnModel_w_mode_switch(object):
             baseline_outputs_all_stps = self.weight_bias(bln_outputs_all, self.piano_dim-self.chord_channel ,"dense_weights_bln")
         return baseline_outputs_all_stps, baseline_last_state
 
-    def birnn(self, all_chords):
-        
-        outputs_tuple,_ = tf.nn.bidirectional_dynamic_rnn(cell_fw = self.birnn_fwcell, cell_bw = self.birnn_bwcell,inputs = all_chords, dtype=tf.float32)
-
-        #outputs_tuple,_ = tf.nn.bidirectional_dynamic_rnn(cell_fw = forward_cell, cell_bw = backward_cell,inputs = all_chords, dtype=tf.float32)
-        outputs = tf.concat([outputs_tuple[0],outputs_tuple[1]], axis = -1)
-        #all_chords_birnn = self.weight_bias(outputs, 2*self.chord_channel ,"birnn_weights_3") 
-        all_chords_birnn = self.weight_bias(outputs, self.chord_channel ,"birnn_weights_3") 
-        return all_chords_birnn
-    def _create_network_two_layer_SampleRnn(self, two_t_input):
-        print("####MODEL:NOTE BAR...####")
-        with tf.name_scope('SampleRnn_net'):
-            #sample_input = two_t_input[:,self.big_frame_size:-1,:]
-    
-            #frame_input = two_t_input[:, self.big_frame_size:,:] 
-
-            sample_input = two_t_input[:,self.big_frame_size-self.frame_size:-1,:]
-
-            frame_input = two_t_input[:, self.big_frame_size-self.frame_size:-self.frame_size,:] 
-
-            big_frame_input = two_t_input[:,:-self.big_frame_size,:]  
-
-            big_frame_outputs , final_big_frame_state = self.big_frame_level(big_frame_input)
-
-            frame_outputs , final_frame_state = self.frame_level(frame_input, bigframe_output = big_frame_outputs)
-
-            ##sample_level## 
-            sample_logits= self.sample_level(sample_input, frame_output = frame_outputs)
-
-            return sample_logits
-
-
-    def _create_network_one_layer_SampleRnn(self, one_t_input):
-        print("####MODEL:BAR...####")
-        sample_input = one_t_input[:,:-1,:]
- 
-        frame_input = one_t_input[:, :-self.frame_size,:] 
-
-        ##frame_level##
-        frame_outputs , final_frame_state = self.frame_level(frame_input)
-        ##sample_level## 
-        sample_logits= self.sample_level(sample_input, frame_output = frame_outputs)
-        return sample_logits
-
     def _create_network_2t_fc(self, one_t_input):
         print("####MODEL:BAR...####")
         sample_input = one_t_input[:,:-1,:]
@@ -322,34 +196,14 @@ class SampleRnnModel_w_mode_switch(object):
         frame_input = one_t_input[:, :-self.frame_size,:] 
 
         ##frame_level##
-        frame_outputs , final_frame_state = self.frame_level(frame_input)
+        frame_outputs , final_frame_state = self.frame_level_switch(frame_input)
         ##sample_level## 
         sample_logits= self.sample_level(sample_input, frame_output = frame_outputs)
         return sample_logits
 
-    def _create_network_noSampleRnn(self, baseline_input):
 
-        sample_outputs_all, sample_state_new = tf.nn.dynamic_rnn(self.sample_cell, baseline_input,
-                                   dtype=tf.float32)
-        sample_outputs_last = sample_outputs_all[:, -1, :] # (iter*batch, dim)
-        #sample_outputs_logits = self.weight_bias(sample_outputs_last, self.note_channel,"dense_weights_3")
-        sample_outputs_logits = self.weight_bias(sample_outputs_last, self.piano_dim-self.chord_channel ,"dense_weights_3") 
-        sample_outputs_logits = tf.nn.relu(sample_outputs_logits)# (iter*batch, note_channel+rhythm)
-        return sample_outputs_logits
-
-    def _create_network_ad_rm2t(self, one_t_input, rm_tm):
-        sample_input = one_t_input[:,:-1,:] # batch, seq-1, piano_dim
- 
-        frame_input = one_t_input[:, :-self.frame_size,:] #(batch, seq-frame_size, piano_dim)
-        remaining_time_input = rm_tm #(batch, seq-frame_size, piano_dim)
-        print("fram input dim",frame_input)
-        ##frame_level##
-        frame_outputs , final_frame_state = self.frame_level(frame_input)
-        ##sample_level## 
-        sample_logits= self.sample_level(sample_input, frame_output = frame_outputs, rm_time = remaining_time_input)
-        return sample_logits        
-    def _create_network_ad_rm3t(self, two_t_input, rm_tm):
-        print("yes ad rm 3t")
+    def _create_network_3t_fc(self, two_t_input, if_rs = False):
+        print("3t_fc")
         #big frame level
         big_frame_input = two_t_input[:,:-self.big_frame_size,:]  
 
@@ -358,38 +212,14 @@ class SampleRnnModel_w_mode_switch(object):
         #frame level
         frame_input = two_t_input[:, self.big_frame_size-self.frame_size:-self.frame_size,:]
 
-        frame_outputs , final_frame_state = self.frame_level(frame_input, bigframe_output = big_frame_outputs)
+        frame_outputs , final_frame_state = self.frame_level_switch(frame_input, bigframe_output = big_frame_outputs, if_rs = if_rs)
 
         ##sample level
-        remaining_time_input = rm_tm
-
         sample_input = two_t_input[:,self.big_frame_size-self.frame_size:-1,:]
 
-        sample_logits= self.sample_level(sample_input, frame_output = frame_outputs, rm_time = remaining_time_input)
+        sample_logits= self.sample_level(sample_input, frame_output = frame_outputs)
 
         return sample_logits    
-
-    def _create_network_ad_rm2t_birnn(self, one_t_input, rm_tm):
-        #get bidirectional rnn
-
-        #seperate input
-        all_bars = one_t_input[:,:,:self.bar_channel]
-        all_chords = one_t_input[:,:,self.bar_channel:self.bar_channel+self.chord_channel]
-        all_rhythms_melodies = one_t_input[:,:,self.bar_channel+self.chord_channel:]
-
-
-        #all_chords_birnn = self.birnn(self.birnn_fwcell,self.birnn_bwcell,all_chords)
-        all_chords_birnn = self.birnn(all_chords)
-        one_t_input_new = tf.concat([all_bars, all_chords_birnn, all_rhythms_melodies], axis = -1)
-        sample_input = one_t_input_new[:,:-1,:] # batch, seq-1, piano_dim
- 
-        frame_input = one_t_input_new[:, :-self.frame_size,:] #(batch, seq-frame_size, piano_dim)
-        remaining_time_input = rm_tm #(batch, seq-frame_size, piano_dim)
-        ##frame_level##
-        frame_outputs , final_frame_state = self.frame_level(frame_input)
-        ##sample_level## 
-        sample_logits= self.sample_level(sample_input, frame_output = frame_outputs, rm_time = remaining_time_input)
-        return sample_logits  
 
     def _create_network_ad_rm2t_fc(self, one_t_input, rm_tm):
         sample_input = one_t_input[:,:-1,:] # batch, seq-1, piano_dim
@@ -398,7 +228,7 @@ class SampleRnnModel_w_mode_switch(object):
         remaining_time_input = rm_tm #(batch, seq-frame_size, piano_dim)
         print("fram input dim",frame_input)
         ##frame_level##
-        frame_outputs , final_frame_state = self.frame_level(frame_input)
+        frame_outputs , final_frame_state = self.frame_level_switch(frame_input)
         ##sample_level## 
         sample_logits= self.sample_level(sample_input, frame_output = frame_outputs, rm_time = remaining_time_input)
         return sample_logits        
@@ -438,26 +268,7 @@ class SampleRnnModel_w_mode_switch(object):
         self.rm_time = rm_time
 
         with tf.name_scope(name):
-            if self.mode_choice =="bar_note":
-                pred_logits = self._create_network_two_layer_SampleRnn(two_t_input = self.X) #(batch* seq_len-frame-big_frame, self.note + self.rhythm)
-                pd = pred_logits
-
-            elif self.mode_choice =="note":
-                pred_logits= self._create_network_one_layer_SampleRnn(one_t_input = self.X) #(batch* seq_len-frame, self.note + self.rhythm)
-                pd = pred_logits
-            elif self.mode_choice=="nosamplernn":
-                pred_logits = self._create_network_noSampleRnn( baseline_input= self.X) #(batch, self.note + self.rhythm)
-                pd = tf.expand_dims(pred_logits, axis = 1) #(batch, 1, self.note + self.rhythm)
-            elif self.mode_choice=="ad_rm2t":
-                pred_logits= self._create_network_ad_rm2t(one_t_input = self.X, rm_tm = self.rm_time) #(batch* seq_len-frame, self.note + self.rhythm)
-                pd = pred_logits       
-            elif self.mode_choice=="ad_rm3t":  
-                pred_logits= self._create_network_ad_rm3t(two_t_input = self.X, rm_tm = self.rm_time) #(batch* seq_len-frame, self.note + self.rhythm)
-                pd = pred_logits  
-            elif self.mode_choice=="ad_rm2t_birnn":  
-                pred_logits= self._create_network_ad_rm2t_birnn(one_t_input = self.X, rm_tm = self.rm_time) #(batch* seq_len-frame, self.note + self.rhythm)
-                pd = pred_logits     
-            elif self.mode_choice=="ad_rm2t_fc":  
+            if self.mode_choice=="ad_rm2t_fc":  
                 pred_logits= self._create_network_ad_rm2t_fc(one_t_input = self.X, rm_tm = self.rm_time) #(batch* seq_len-frame, self.note + self.rhythm)
                 pd = pred_logits 
             elif self.mode_choice=="ad_rm3t_fc":  
@@ -471,7 +282,10 @@ class SampleRnnModel_w_mode_switch(object):
                 pd = pred_logits       
             elif self.mode_choice=="2t_fc":  
                 pred_logits= self._create_network_2t_fc(one_t_input = self.X) #(batch* seq_len-frame, self.note + self.rhythm)
-                pd = pred_logits                                   
+                pd = pred_logits             
+            elif self.mode_choice=="3t_fc":  
+                pred_logits= self._create_network_3t_fc(two_t_input = self.X) #(batch* seq_len-frame, self.note + self.rhythm)
+                pd = pred_logits                           
             gt_bar = self.y[:, :, :self.bar_channel]
             gt_sustain = self.y[:, :, self.bar_channel : self.bar_channel+self.rhythm_channel]
             gt_note = self.y[:,:, self.bar_channel+self.rhythm_channel:]

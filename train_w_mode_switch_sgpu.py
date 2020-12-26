@@ -4,7 +4,7 @@ from datetime import datetime
 import json
 import os
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"]="0"
+os.environ["CUDA_VISIBLE_DEVICES"]="1"
 import sys
 import time
 from datetime import datetime
@@ -70,7 +70,7 @@ def get_arguments():
     parser.add_argument('--rnn_type', choices=['LSTM', 'GRU'], required=True)
     parser.add_argument('--max_checkpoints',  type=int, default=MAX_TO_KEEP)
     parser.add_argument('--saved_path',  type=str, default=None)
-    parser.add_argument('--mode_choice', choices=["ad_rm2t_birnn","ad_rm2t_fc","ad_rm3t_fc","ad_rm3t_fc_rs","bln_attn_fc","2t_fc","3t_fc"], type = str,default='ad_rm2t_fc')
+    parser.add_argument('--mode_choice', choices=["ad_rm2t_fc","ad_rm3t_fc","ad_rm3t_fc_rs","bln_attn_fc","2t_fc","3t_fc"], type = str,default='ad_rm2t_fc')
     parser.add_argument('--if_cond',type=str, choices=['cond','no_cond'])
     parser.add_argument('--piano_dim',type=int, default = PIANO_DIM)
     parser.add_argument('--note_channel',type=int, default = NOTE_CHANNEL)
@@ -182,10 +182,6 @@ def main():
     if args.mode_choice=="bln_attn_fc":
         network_input_plder= tf.placeholder(tf.float32,shape =(None, args.seq_len, args.piano_dim+args.chord_channel), name = "input_batch_rnn")
         network_output_plder = tf.placeholder(tf.float32,shape =(None, args.seq_len, args.piano_dim-args.chord_channel), name = "output_batch_rnn")
-    elif args.mode_choice=="ad_rm2t" or args.mode_choice=="ad_rm2t_birnn":
-        network_input_plder= tf.placeholder(tf.float32,shape =(None, args.seq_len, args.piano_dim), name = "input_batch_rnn")
-        rm_time_plder = tf.placeholder(tf.float32,shape =(None, args.seq_len-args.frame_size, args.rhythm_channel), name = "rm_tm_rnn")
-        network_output_plder = tf.placeholder(tf.float32,shape =(None, args.seq_len-args.frame_size, args.piano_dim-args.chord_channel), name = "output_batch_rnn")
     elif args.mode_choice=="ad_rm2t_fc":
         network_input_plder= tf.placeholder(tf.float32,shape =(None, args.seq_len, args.piano_dim+args.chord_channel), name = "input_batch_rnn")
         rm_time_plder = tf.placeholder(tf.float32,shape =(None, args.seq_len-args.frame_size, args.rhythm_channel), name = "rm_tm_rnn")
