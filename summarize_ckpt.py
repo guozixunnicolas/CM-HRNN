@@ -114,47 +114,30 @@ def get_feature(mid_file, long_short_threshold = 16):
     
     return ratio, num_long_pattern, num_short_pattern, current_file_has_long_pattern
 
-"""folders_2b_evaluated = ["test/generated_result/11_14_2020_13_23_50_Electronic_ad_rm3t/120000/32/0.6_0.4",
-                       "test/generated_result/11_14_2020_13_23_50_Electronic_ad_rm3t/120000/32/0.6_0.2",
-                       "test/generated_result/11_14_2020_13_23_50_Electronic_ad_rm3t/120000/32/0.6_0.1",
-                       "test/generated_result/11_14_2020_13_22_48_Electronic_ad_rm3t/120000/16/0.6_0.4",
-                       "test/generated_result/11_14_2020_13_22_48_Electronic_ad_rm3t/120000/16/0.6_0.2",
-                       "test/generated_result/11_14_2020_13_22_48_Electronic_ad_rm3t/120000/16/0.6_0.1",
-                       "test/generated_result/11_14_2020_13_19_10_Electronic_ad_rm3t/120000/32/0.7_0.1",
-                       "test/generated_result/11_14_2020_13_19_10_Electronic_ad_rm3t/120000/32/0.7_0.2",
-                       "test/generated_result/11_14_2020_13_19_10_Electronic_ad_rm3t/120000/32/0.7_0.4",
-                       "test/generated_result/11_14_2020_13_19_10_Electronic_ad_rm3t/120000/32/0.6_0.1",
-                       "test/generated_result/11_14_2020_13_19_10_Electronic_ad_rm3t/120000/32/0.6_0.2",
-                       "test/generated_result/11_14_2020_13_19_10_Electronic_ad_rm3t/120000/32/0.6_0.4",
-                       "test/generated_result/11_14_2020_13_17_51_Electronic_ad_rm3t/120000/16/0.7_0.1",
-                       "test/generated_result/11_14_2020_13_17_51_Electronic_ad_rm3t/120000/16/0.7_0.2",
-                       "test/generated_result/11_14_2020_13_17_51_Electronic_ad_rm3t/120000/16/0.7_0.4",
-                       "test/generated_result/11_14_2020_13_17_51_Electronic_ad_rm3t/120000/16/0.6_0.1",
-                       "test/generated_result/11_14_2020_13_17_51_Electronic_ad_rm3t/120000/16/0.6_0.2",
-                       "test/generated_result/11_14_2020_13_17_51_Electronic_ad_rm3t/120000/16/0.6_0.4",
-                       "test/generated_result/11_10_2020_08_15_26_Electronic_ad_rm2t/120000/16/0.7_0.1",
-                       "test/generated_result/11_10_2020_08_15_26_Electronic_ad_rm2t/120000/16/0.7_0.3",
-                       "test/generated_result/11_10_2020_08_15_26_Electronic_ad_rm2t/120000/16/0.7_0.4",
-                       "test/generated_result/11_17_2020_07_19_37_Electronic_ad_rm2t_birnn/120000/16/0.7_0.4",
-                       "test/generated_result/11_17_2020_07_19_37_Electronic_ad_rm2t_birnn/120000/16/0.7_0.2",
-                       "test/generated_result/11_17_2020_07_19_37_Electronic_ad_rm2t_birnn/120000/16/0.7_0.1",]
-"""
-"""folders_2b_evaluated = ["test/generated_result/12_08_2020_16_37_41_Electronic_ad_rm3t_fc/120000/16/0.7_0.1",
-                        "test/generated_result/12_08_2020_16_37_41_Electronic_ad_rm3t_fc/120000/16/0.7_0.2",
-                        "test/generated_result/12_08_2020_16_37_41_Electronic_ad_rm3t_fc/120000/16/0.7_0.4",
-                        "test/generated_result/12_08_2020_16_39_07_Electronic_ad_rm3t_fc_rs/120000/16/0.7_0.1",
-                        "test/generated_result/12_08_2020_16_39_07_Electronic_ad_rm3t_fc_rs/120000/16/0.7_0.2",
-                        "test/generated_result/12_08_2020_16_39_07_Electronic_ad_rm3t_fc_rs/120000/16/0.7_0.4"
+"""folders_2b_evaluated = ["test/generated_result/12_23_2020_12_06_51_merged_ad_rm2t_fc/120000/16/0.7_0.2",
+                        "test/generated_result/12_23_2020_12_13_39_merged_ad_rm3t_fc_rs/120000/16/0.7_0.2",
+                        "test/generated_result/12_24_2020_17_12_03_merged_ad_rm3t_fc/120000/16/0.7_0.2",
+                        "test/generated_result/12_24_2020_19_01_34_merged_ad_rm2t_fc/120000/16/0.7_0.2",
+                        "test/generated_result/12_24_2020_19_06_57_merged_ad_rm3t_fc_rs/120000/16/0.7_0.2",
+                        "test/generated_result/12_24_2020_19_06_57_merged_ad_rm3t_fc_rs/120000/16/0.7_0.2",
+                        "test/generated_result/12_26_2020_14_17_37_merged_ad_rm2t_fc/120000/16/0.7_0.2",
+                        "test/generated_result/12_26_2020_14_19_02_merged_ad_rm3t_fc/120000/16/0.7_0.2",
+                        "test/generated_result/12_26_2020_14_21_14_merged_ad_rm3t_fc_rs/120000/16/0.7_0.2",
+                        "test/generated_result/12_27_2020_10_06_38_merged_ad_rm3t_fc_rs/120000/16/0.7_0.2",
+                        "test/generated_result/12_27_2020_10_10_35_merged_ad_rm3t_fc_rs/120000/16/0.7_0.2"
                         ]"""
-folders_2b_evaluated = [ "test/generated_result/11_20_2020_09_17_54_Electronic_ad_rm2t_fc/120000/16/0.7_0.1",
-"test/generated_result/11_20_2020_09_17_54_Electronic_ad_rm2t_fc/120000/16/0.7_0.2",
-"test/generated_result/11_20_2020_09_17_54_Electronic_ad_rm2t_fc/120000/16/0.7_0.4",
-"test/generated_result/12_15_2020_05_21_43_Electronic_ad_rm3t_fc_rs/120000/16/0.7_0.1",
-"test/generated_result/12_15_2020_05_21_43_Electronic_ad_rm3t_fc_rs/120000/16/0.7_0.2",
-"test/generated_result/12_15_2020_05_21_43_Electronic_ad_rm3t_fc_rs/120000/16/0.7_0.4",
-"test/generated_result/12_15_2020_05_23_16_Electronic_ad_rm3t_fc_rs/120000/16/0.7_0.1",
-"test/generated_result/12_15_2020_05_23_16_Electronic_ad_rm3t_fc_rs/120000/16/0.7_0.2",
-"test/generated_result/12_15_2020_05_23_16_Electronic_ad_rm3t_fc_rs/120000/16/0.7_0.4"]                        
+"""folders_2b_evaluated = ["test/generated_result/12_23_2020_12_06_51_merged_ad_rm2t_fc/120000/16/0.7_0.4",
+                        "test/generated_result/12_23_2020_12_13_39_merged_ad_rm3t_fc_rs/120000/16/0.7_0.4",
+                        "test/generated_result/12_24_2020_17_12_03_merged_ad_rm3t_fc/120000/16/0.7_0.4",
+                        "test/generated_result/12_24_2020_19_01_34_merged_ad_rm2t_fc/120000/16/0.7_0.4",
+                        "test/generated_result/12_24_2020_19_06_57_merged_ad_rm3t_fc_rs/120000/16/0.7_0.4",
+                        "test/generated_result/12_24_2020_19_06_57_merged_ad_rm3t_fc_rs/120000/16/0.7_0.4",
+                        "test/generated_result/12_26_2020_14_17_37_merged_ad_rm2t_fc/120000/16/0.7_0.4",
+                        "test/generated_result/12_26_2020_14_19_02_merged_ad_rm3t_fc/120000/16/0.7_0.4",
+                        "test/generated_result/12_26_2020_14_21_14_merged_ad_rm3t_fc_rs/120000/16/0.7_0.4",
+                        "test/generated_result/12_27_2020_10_06_38_merged_ad_rm3t_fc_rs/120000/16/0.7_0.4",
+                        "test/generated_result/12_27_2020_10_10_35_merged_ad_rm3t_fc_rs/120000/16/0.7_0.4"
+                        ]"""
 merged_dict = []
 for folder in folders_2b_evaluated:
 
@@ -166,6 +149,7 @@ for folder in folders_2b_evaluated:
         with open(json_name, "r") as js:
             dictionary = json.load(js)
     else:
+        print("processing ",folder)
         npy_files_lst = glob.glob(folder+"/*.npy")
         mid_files_lst = glob.glob(folder+"/*.mid")
         mid_files_eva = [f for f in mid_files_lst if f.split("_")[-1]=="eva.mid"]
@@ -237,8 +221,8 @@ for k in dictionary.keys():
   merged_data_frame[k]=tuple(d[k] for d in merged_dict)
 """
 #df = pd.DataFrame(merged_dict, columns = ["logdir","comp_ratio","long_pattern","short_pattern", "mode_choice", "big_frame_size", "frame_size"])
-
-print(df[ df["mode_choice"]=="ad_rm2t_fc"])
+df.to_csv("0.7_0.4.csv")
+#print(df[ df["mode_choice"]=="ad_rm2t_fc"])
 
 #print(df[ 'mode_choice','long_pattern'])
 

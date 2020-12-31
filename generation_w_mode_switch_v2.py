@@ -3,7 +3,7 @@ import argparse
 from datetime import datetime
 import os
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"]="3"
+os.environ["CUDA_VISIBLE_DEVICES"]="1"
 import sys
 import time
 from datetime import datetime
@@ -300,7 +300,7 @@ def create_graph_ad_rm2t_fc(net):
 
         tf.get_variable_scope().reuse_variables()
 
-        infe_para['infe_frame_outp'], infe_para['infe_next_frame_state'] = net.frame_level(
+        infe_para['infe_frame_outp'], infe_para['infe_next_frame_state'] = net.frame_level_switch(
                 frame_input=infe_para['infe_frame_inp'],
                 frame_state = infe_para['infe_frame_state']
         )
@@ -605,13 +605,17 @@ def main():
 
     with session as sess:
         saver.restore(sess, logdir)
+        count = 0
+        total_count = len(test_file_list)
         for original_test_file,file_name in test_file_list:
             print('Processing',file_name)
+            print("process:{}/{}".format(count,total_count))
             t_start = time.time()
 
             forward_prop(net, graph, sess, original_test_file, file_name, gen_dir_model_number, args, int(seed_length),mod_arg.mode_choice)
 
             t_end = time.time()
+            count+=1
             print(file_name,' processing time: ', t_end-t_start)
     
 if __name__ == '__main__':
