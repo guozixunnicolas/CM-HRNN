@@ -138,6 +138,19 @@ def get_feature(mid_file, long_short_threshold = 16):
                         "test/generated_result/12_27_2020_10_06_38_merged_ad_rm3t_fc_rs/120000/16/0.7_0.4",
                         "test/generated_result/12_27_2020_10_10_35_merged_ad_rm3t_fc_rs/120000/16/0.7_0.4"
                         ]"""
+"""folders_2b_evaluated = ["test/generated_result/12_23_2020_12_11_39_merged_2t_fc/120000/16/0.7_0.4",
+                        "test/generated_result/12_23_2020_12_16_59_merged_3t_fc/120000/16/0.7_0.4"]"""
+"""folders_2b_evaluated =["test/generated_result/12_24_2020_19_08_56_merged_ad_rm3t_fc/120000/16/0.7_0.4",
+                      "test/generated_result/12_24_2020_19_08_56_merged_ad_rm3t_fc/120000/16/0.7_0.2"]"""
+
+folders_2b_evaluated =["test/generated_result/12_31_2020_07_09_45_merged_3t_fc/120000/16/0.7_0.2",
+                        "test/generated_result/12_31_2020_07_12_29_merged_2t_fc/120000/16/0.7_0.2",
+                        "test/generated_result/12_31_2020_09_17_23_merged_ad_rm3t_fc/120000/16/0.7_0.2",
+                        "test/generated_result/12_31_2020_09_22_20_merged_ad_rm3t_fc/120000/16/0.7_0.2",
+                        "test/generated_result/12_31_2020_07_09_45_merged_3t_fc/120000/16/0.7_0.4",
+                        "test/generated_result/12_31_2020_07_12_29_merged_2t_fc/120000/16/0.7_0.4",
+                        "test/generated_result/12_31_2020_09_17_23_merged_ad_rm3t_fc/120000/16/0.7_0.4",
+                        "test/generated_result/12_31_2020_09_22_20_merged_ad_rm3t_fc/120000/16/0.7_0.4"]
 merged_dict = []
 for folder in folders_2b_evaluated:
 
@@ -180,7 +193,7 @@ for folder in folders_2b_evaluated:
             dim = lines[10].split(":")[-1][1:-1]
         dictionary["rnn_dim"]=dim
         dictionary["mode_choice"]=mode_choice_ckpt
-        if mode_choice_ckpt =="bar_note" or mode_choice_ckpt =="ad_rm3t":    
+        if mode_choice_ckpt =="3t_fc" or mode_choice_ckpt =="ad_rm3t_fc_rs" or mode_choice_ckpt =="ad_rm3t_fc":    
             dictionary["big_frame_size"]=big_frame_size
             dictionary["frame_size"]=frame_size
         else:
@@ -221,7 +234,7 @@ for k in dictionary.keys():
   merged_data_frame[k]=tuple(d[k] for d in merged_dict)
 """
 #df = pd.DataFrame(merged_dict, columns = ["logdir","comp_ratio","long_pattern","short_pattern", "mode_choice", "big_frame_size", "frame_size"])
-df.to_csv("0.7_0.4.csv")
+#df.to_csv("2t_3t_0.7_0.4.csv")
 #print(df[ df["mode_choice"]=="ad_rm2t_fc"])
 
 #print(df[ 'mode_choice','long_pattern'])
