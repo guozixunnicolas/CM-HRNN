@@ -68,18 +68,25 @@ class SampleRnnModel_w_mode_switch(object):
 
                 return cell
         if self.n_rnn > 1:
-            self.sample_cell = tf.contrib.rnn.MultiRNNCell([single_cell(if_attention = True, atten_len = self.frame_size) for _ in range(self.n_rnn)])
+            #self.sample_cell = tf.contrib.rnn.MultiRNNCell([single_cell(if_attention = True, atten_len = self.frame_size) for _ in range(self.n_rnn)])
+            attn_cell_lst = [single_cell(if_attention = True, atten_len = self.frame_size)]
+            attn_cell_lst += [single_cell() for _ in range(self.n_rnn-1)]
+            self.attn_cell = tf.contrib.rnn.MultiRNNCell(attn_cell_lst)
+            self.sample_cell = tf.contrib.rnn.MultiRNNCell([single_cell() for _ in range(self.n_rnn)])
             self.frame_cell = tf.contrib.rnn.MultiRNNCell([single_cell() for _ in range(self.n_rnn)])
             self.big_frame_cell = tf.contrib.rnn.MultiRNNCell([single_cell() for _ in range(self.n_rnn)])
             self.birnn_fwcell = single_birnncell()
             self.birnn_bwcell = single_birnncell()
         else:
-            self.sample_cell = single_cell(if_attention = True, atten_len = self.frame_size)
+            self.attn_cell = single_cell(if_attention = True, atten_len = self.frame_size)
+            #self.sample_cell = single_cell(if_attention = True, atten_len = self.frame_size)
+            self.sample_cell = single_cell()
             self.frame_cell = single_cell()
             self.big_frame_cell = single_cell()
             self.birnn_fwcell = single_birnncell()
             self.birnn_bwcell = single_birnncell()
         self.sample_init = self.sample_cell.zero_state(self.batch_size, tf.float32)
+        self.attn_cell_init = self.attn_cell.zero_state(self.batch_size, tf.float32)
         self.frame_init = self.frame_cell.zero_state(self.batch_size, tf.float32)
         self.big_frame_init = self.big_frame_cell.zero_state(self.batch_size, tf.float32) 
         self.birnn_fw_init = self.birnn_fwcell.zero_state(self.batch_size, tf.float32)
@@ -178,13 +185,19 @@ class SampleRnnModel_w_mode_switch(object):
         
         return sample_outputs_logits  #return (batch, pred_length, piano_dim)
 
-    def bln_attn(self, baseline_input, baseline_state = None):
-        with tf.variable_scope("baseline"):
-            if baseline_state is not None: #during generation
-                bln_outputs_all, baseline_last_state = tf.nn.dynamic_rnn(self.sample_cell, baseline_input,initial_state = baseline_state, dtype=tf.float32)
+    def bln_attn(self, baseline_input, baseline_state = None, if_attn = True):
+        if if_attn:
+            print("cell choice is attn")
+            cell = self.attn_cell
+        else:
+            cell = self.sample_cell
 
-            else: #during training
-                bln_outputs_all, baseline_last_state = tf.nn.dynamic_rnn(self.sample_cell, baseline_input, dtype=tf.float32) #batch, no_chunks, dim
+        with tf.variable_scope("baseline"):
+            if baseline_state is None: #during training
+                bln_outputs_all, baseline_last_state = tf.nn.dynamic_rnn(cell, baseline_input, dtype=tf.float32) #batch, no_chunks, dim
+
+            else: #during generation
+                bln_outputs_all, baseline_last_state = tf.nn.dynamic_rnn(cell, baseline_input,initial_state = baseline_state, dtype=tf.float32)
 
             baseline_outputs_all_stps = self.weight_bias(bln_outputs_all, self.piano_dim-self.chord_channel ,"dense_weights_bln")
         return baseline_outputs_all_stps, baseline_last_state
@@ -200,7 +213,6 @@ class SampleRnnModel_w_mode_switch(object):
         ##sample_level## 
         sample_logits= self.sample_level(sample_input, frame_output = frame_outputs)
         return sample_logits
-
 
     def _create_network_3t_fc(self, two_t_input, if_rs = False):
         print("3t_fc")
@@ -253,9 +265,11 @@ class SampleRnnModel_w_mode_switch(object):
             sample_logits= self.sample_level(sample_input, frame_output = frame_outputs, rm_time = remaining_time_input)
 
             return sample_logits
-    def _create_network_bln_attn_fc(self, baseline_input):
-        bln_outputs_logits,_ = self.bln_attn(baseline_input)
+
+    def _create_network_bln_attn_fc(self, baseline_input, if_attn = False):
+        bln_outputs_logits,_ = self.bln_attn(baseline_input, if_attn = if_attn)
         return bln_outputs_logits
+
     def loss_SampleRnn(self, X,y, rm_time = None,l2_regularization_strength=None, name='sample'):
         """ nosamplernn: X: (batch, frame_size, dim), Y:(batch, 1, dim)
             barnote: X(batch, seq_len, dim), Y:(batch, seq_len-frame-big_frame, dim)
@@ -278,8 +292,11 @@ class SampleRnnModel_w_mode_switch(object):
                 pred_logits= self._create_network_ad_rm3t_fc(two_t_input = self.X, rm_tm = self.rm_time, if_rs = True) #(batch* seq_len-frame, self.note + self.rhythm)
                 pd = pred_logits    
             elif self.mode_choice=="bln_attn_fc":  
-                pred_logits= self._create_network_bln_attn_fc(baseline_input = self.X) #(batch* seq_len-frame, self.note + self.rhythm)
+                pred_logits= self._create_network_bln_attn_fc(baseline_input = self.X, if_attn = True) #(batch* seq_len-frame, self.note + self.rhythm)
                 pd = pred_logits       
+            elif self.mode_choice=="bln_fc":  
+                pred_logits= self._create_network_bln_attn_fc(baseline_input = self.X, if_attn = False) #(batch* seq_len-frame, self.note + self.rhythm)
+                pd = pred_logits      
             elif self.mode_choice=="2t_fc":  
                 pred_logits= self._create_network_2t_fc(one_t_input = self.X) #(batch* seq_len-frame, self.note + self.rhythm)
                 pd = pred_logits             

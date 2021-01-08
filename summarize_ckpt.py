@@ -143,15 +143,44 @@ def get_feature(mid_file, long_short_threshold = 16):
 """folders_2b_evaluated =["test/generated_result/12_24_2020_19_08_56_merged_ad_rm3t_fc/120000/16/0.7_0.4",
                       "test/generated_result/12_24_2020_19_08_56_merged_ad_rm3t_fc/120000/16/0.7_0.2"]"""
 
-folders_2b_evaluated =["test/generated_result/12_31_2020_07_09_45_merged_3t_fc/120000/16/0.7_0.2",
+"""folders_2b_evaluated =["test/generated_result/12_31_2020_07_09_45_merged_3t_fc/120000/16/0.7_0.2",
                         "test/generated_result/12_31_2020_07_12_29_merged_2t_fc/120000/16/0.7_0.2",
                         "test/generated_result/12_31_2020_09_17_23_merged_ad_rm3t_fc/120000/16/0.7_0.2",
                         "test/generated_result/12_31_2020_09_22_20_merged_ad_rm3t_fc/120000/16/0.7_0.2",
                         "test/generated_result/12_31_2020_07_09_45_merged_3t_fc/120000/16/0.7_0.4",
                         "test/generated_result/12_31_2020_07_12_29_merged_2t_fc/120000/16/0.7_0.4",
                         "test/generated_result/12_31_2020_09_17_23_merged_ad_rm3t_fc/120000/16/0.7_0.4",
-                        "test/generated_result/12_31_2020_09_22_20_merged_ad_rm3t_fc/120000/16/0.7_0.4"]
+                        "test/generated_result/12_31_2020_09_22_20_merged_ad_rm3t_fc/120000/16/0.7_0.4"]"""
+
+"""folders_2b_evaluated =["test/generated_result/12_24_2020_19_01_34_merged_ad_rm2t_fc/120000/16/0.7_0.4",
+                        "test/generated_result/12_24_2020_19_06_57_merged_ad_rm3t_fc_rs/120000/16/0.7_0.4",
+                        "test/generated_result/12_24_2020_19_08_56_merged_ad_rm3t_fc/120000/16/0.7_0.4",
+                        "test/generated_result/12_27_2020_10_06_38_merged_ad_rm3t_fc_rs/120000/16/0.7_0.4",
+                        "test/generated_result/12_27_2020_10_10_35_merged_ad_rm3t_fc_rs/120000/16/0.7_0.4",
+                        "test/generated_result/12_31_2020_07_09_45_merged_3t_fc/120000/16/0.7_0.4",
+                        "test/generated_result/12_31_2020_07_12_29_merged_2t_fc/120000/16/0.7_0.4",
+                        "test/generated_result/12_31_2020_09_17_23_merged_ad_rm3t_fc/120000/16/0.7_0.4",
+                        "test/generated_result/12_31_2020_09_22_20_merged_ad_rm3t_fc/120000/16/0.7_0.4"] #suceess ratio and residual connection"""
+
+"""folders_2b_evaluated =["test/generated_result/12_24_2020_19_01_34_merged_ad_rm2t_fc/120000/16/0.7_0.2",
+                        "test/generated_result/12_24_2020_19_06_57_merged_ad_rm3t_fc_rs/120000/16/0.7_0.2",
+                        "test/generated_result/12_24_2020_19_08_56_merged_ad_rm3t_fc/120000/16/0.7_0.2",
+                        "test/generated_result/12_27_2020_10_06_38_merged_ad_rm3t_fc_rs/120000/16/0.7_0.2",
+                        "test/generated_result/12_27_2020_10_10_35_merged_ad_rm3t_fc_rs/120000/16/0.7_0.2",
+                        "test/generated_result/12_31_2020_07_09_45_merged_3t_fc/120000/16/0.7_0.2",
+                        "test/generated_result/12_31_2020_07_12_29_merged_2t_fc/120000/16/0.7_0.2",
+                        "test/generated_result/12_31_2020_09_17_23_merged_ad_rm3t_fc/120000/16/0.7_0.2",
+                        "test/generated_result/12_31_2020_09_22_20_merged_ad_rm3t_fc/120000/16/0.7_0.2"] #suceess ratio and residual connection"""   
+
+#folders_2b_evaluated =["test/generated_result/01_02_2021_05_45_56_merged_bln_fc/120000/16/0.7_0.2",
+ #                       "test/generated_result/01_02_2021_05_45_56_merged_bln_fc/120000/16/0.7_0.4"]
+folders_2b_evaluated =["test/generated_result/01_02_2021_06_06_58_merged_bln_attn_fc/120000/16/0.7_0.2",
+                    "test/generated_result/01_02_2021_06_06_58_merged_bln_attn_fc/120000/16/0.7_0.4",
+                    "test/generated_result/01_02_2021_05_45_56_merged_bln_fc/120000/16/0.7_0.2",
+                      "test/generated_result/01_02_2021_05_45_56_merged_bln_fc/120000/16/0.7_0.4"]
 merged_dict = []
+for folder in folders_2b_evaluated:
+    assert os.path.exists(folder)
 for folder in folders_2b_evaluated:
 
     #dictionary = get_empty_dict()
@@ -234,7 +263,7 @@ for k in dictionary.keys():
   merged_data_frame[k]=tuple(d[k] for d in merged_dict)
 """
 #df = pd.DataFrame(merged_dict, columns = ["logdir","comp_ratio","long_pattern","short_pattern", "mode_choice", "big_frame_size", "frame_size"])
-#df.to_csv("2t_3t_0.7_0.4.csv")
+df.to_csv("baseline.csv")
 #print(df[ df["mode_choice"]=="ad_rm2t_fc"])
 
 #print(df[ 'mode_choice','long_pattern'])
