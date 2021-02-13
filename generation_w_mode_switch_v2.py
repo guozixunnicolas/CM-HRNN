@@ -22,13 +22,13 @@ import numpy as np
 import tensorflow as tf
 
 from tensorflow.python.client import timeline
-from samplernn import SampleRnnModel_w_mode_switch
+from model import CMHRNN
 
-from samplernn import AudioReader
-from samplernn import mu_law_decode
-from samplernn import mu_law_encode
-from samplernn import optimizer_factory
-from samplernn import decode_melody,decode_rhythm, rhythm_to_index,index_to_chord, chord_symbol_to_midi_notes
+from model import AudioReader
+from model import mu_law_decode
+from model import mu_law_encode
+from model import optimizer_factory
+from model import decode_melody,decode_rhythm, rhythm_to_index,index_to_chord, chord_symbol_to_midi_notes
 
 #from lookup_table import decode_melody, decode_rhythm, index_to_chord, chord_symbol_to_midi_notes, rhythm_to_index
 
@@ -44,7 +44,7 @@ SEED_LENGTH = 8  #16*n+4
    
 
 def get_arguments():
-    parser = argparse.ArgumentParser(description='SampleRnn example network')
+    parser = argparse.ArgumentParser(description='CMHRNN example network')
     parser.add_argument('--num_gpus',         type=int,   default=NUM_GPU)
     parser.add_argument('--cond_dir',         type=str,
                         default=COND_DIRECTORY)
