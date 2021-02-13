@@ -14,10 +14,10 @@ from sklearn.model_selection import train_test_split
 import numpy as np
 import tensorflow as tf
 from tensorflow.python.client import timeline
-from samplernn import SampleRnnModel_w_mode_switch
-from samplernn import AudioReader
-from samplernn import mu_law_decode
-from samplernn import optimizer_factory
+from model import CMHRNN
+from model import AudioReader
+from model import mu_law_decode
+from model import optimizer_factory
 ########
 LOGDIR_ROOT = './logdir'
 DATA_DIRECTORY = 'AUDIO'
