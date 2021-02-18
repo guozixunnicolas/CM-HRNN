@@ -1,19 +1,14 @@
 from __future__ import print_function
 import argparse
 from datetime import datetime
-import json
 import os
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"]="2"
 import sys
 import time
-from datetime import datetime
-import random
-from sklearn.model_selection import train_test_split
 
 import numpy as np
 import tensorflow as tf
-from tensorflow.python.client import timeline
 from model import CMHRNN
 from model import AudioReader
 from model import mu_law_decode
@@ -21,11 +16,9 @@ from model import optimizer_factory
 ########
 LOGDIR_ROOT = './logdir'
 DATA_DIRECTORY = 'AUDIO'
-COND_DIRECTORY = 'COND'
 ########
 CHECKPOINT_EVERY = 500
 ########
-#LEARNING_RATE = 8e-5
 LEARNING_RATE = 12e-5
 
 SEQ_LEN = 32 
@@ -37,7 +30,6 @@ NOTE_CHANNEL = 130
 RHYTHM_CHANNEL = 16
 CHORD_CHANNEL = 49
 BAR_CHANNEL = 2
-RATIO = 0.1
 BATCH_SIZE = 1
 NUM_GPU = 1
 
@@ -174,7 +166,7 @@ def main():
     optim = optimizer_factory[args.optimizer](learning_rate=lr,momentum=args.momentum)
 
     ####define graph####
-    net = SampleRnnModel_w_mode_switch(if_train = True, args = args)
+    net = CMHRNN(if_train = True, args = args)
 
 
     ##graph placeholders##
@@ -206,7 +198,7 @@ def main():
                 (   gt,
                     pd,
                     loss
-                )=net.loss_SampleRnn(
+                )=net.loss_CMHRNN(
                     X = network_input_plder,
                     y = network_output_plder,
                     l2_regularization_strength=args.l2_regularization_strength  # noqa: E501
@@ -215,7 +207,7 @@ def main():
                 (   gt,
                     pd,
                     loss
-                )=net.loss_SampleRnn(
+                )=net.loss_CMHRNN(
                     X = network_input_plder,
                     y = network_output_plder,
                     rm_time= rm_time_plder,
@@ -234,7 +226,7 @@ def main():
 
             gradients_vars_clipped = zip(gradients_clipped, variables)
 
-    apply_gradient_op = optim.apply_gradients(gradients_vars, global_step=global_step)
+    apply_gradient_op = optim.apply_gradients(gradients_vars_clipped, global_step=global_step)
 
     ####summary####
     writer = tf.summary.FileWriter(logdir+"/train")
@@ -273,8 +265,7 @@ def main():
     step = None
     last_saved_step = saved_global_step
 
-
-    ####read data and condition####
+    ####read data####
 
     with tf.name_scope('create_inputs'):
         reader = AudioReader(coord =coord,
@@ -291,9 +282,6 @@ def main():
                 start_time = time.time()
                 X, y = sess.run(audio_batch) #[ [(batch,seq,dim)]     [(batch,seq,dim)] ]
                 ## define output list ##
-                loss_sum_train = 0
-                loss_sum_test = 0
-                idx_begin = 0
 
                 outp_list_train = [gt,pd, summaries, loss, apply_gradient_op]
                 outp_list_test = [gt,pd,summaries, loss]

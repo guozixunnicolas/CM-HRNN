@@ -1,7 +1,4 @@
 import tensorflow as tf
-from tensorflow.python.ops import math_ops
-from tensorflow.python.ops import embedding_ops
-from tensorflow.python.ops import rnn_cell
 import os
 import numpy as np
 
@@ -37,18 +34,14 @@ class CMHRNN(object):
         def single_cell(if_attention = False, atten_len = None):
             if self.rnn_type =="GRU":
                 cell = tf.contrib.rnn.GRUCell(self.dim)
-                #cell = tf.contrib.rnn.AttentionCellWrapper(cell, attn_length=2)
                 if if_attention == True:
-                    print("with fucking attention")
                     cell = tf.contrib.rnn.AttentionCellWrapper(cell, attn_length=atten_len)
                 if self.if_train:
                     cell = tf.contrib.rnn.DropoutWrapper(cell,output_keep_prob=self.drop_out_keep_prob)
                 return cell
             elif self.rnn_type =="LSTM":
-                print("yeah lstm")
                 cell = tf.contrib.rnn.BasicLSTMCell(self.dim)
                 if if_attention == True:
-                    print("with fucking attention")
                     cell = tf.contrib.rnn.AttentionCellWrapper(cell, attn_length=atten_len)
 
                 if self.if_train:
@@ -68,9 +61,6 @@ class CMHRNN(object):
 
                 return cell
         if self.n_rnn > 1:
-            #self.sample_cell = tf.contrib.rnn.MultiRNNCell([single_cell(if_attention = True, atten_len = self.frame_size) for _ in range(self.n_rnn)])
-            
-            #attn_cell_lst = [single_cell(if_attention = True, atten_len = self.frame_size)]
             attn_cell_lst = [single_cell(if_attention = True, atten_len = 2*self.frame_size)]
             attn_cell_lst += [single_cell() for _ in range(self.n_rnn-1)]
             self.attn_cell = tf.contrib.rnn.MultiRNNCell(attn_cell_lst)
@@ -80,9 +70,7 @@ class CMHRNN(object):
             self.birnn_fwcell = single_birnncell()
             self.birnn_bwcell = single_birnncell()
         else:
-            #self.attn_cell = single_cell(if_attention = True, atten_len = self.frame_size)
             self.attn_cell = single_cell(if_attention = True, atten_len = 2*self.frame_size)
-            #self.sample_cell = single_cell(if_attention = True, atten_len = self.frame_size)
             self.sample_cell = single_cell()
             self.frame_cell = single_cell()
             self.big_frame_cell = single_cell()
@@ -94,10 +82,6 @@ class CMHRNN(object):
         self.big_frame_init = self.big_frame_cell.zero_state(self.batch_size, tf.float32) 
         self.birnn_fw_init = self.birnn_fwcell.zero_state(self.batch_size, tf.float32)
         self.birnn_bw_init = self.birnn_bwcell.zero_state(self.batch_size, tf.float32)
-        #self.cell = single_cell()
-        #self.big_cell = single_cell()      
-        #self.initial_state = self.cell.zero_state(self.batch_size, tf.float32)
-        #self.big_initial_state = self.big_cell.zero_state(self.batch_size, tf.float32)
 
     def weight_bias(self,tensor_in,dim,name):
         with tf.variable_scope(name):
@@ -106,7 +90,6 @@ class CMHRNN(object):
             W = tf.get_variable(name = name+'_W', shape=(tensor_in.shape[-1],dim), initializer=W_initializer, dtype=tf.float32, trainable=True)
             b = tf.get_variable(name = name+'_b', shape=(dim), initializer=b_initializer, dtype=tf.float32, trainable=True)
             out = tf.add(tf.matmul(tensor_in, W), b)
-            #print("tensor in:{}, W:{}, b:{}, out:{}".format(tensor_in.shape, W.shape, b.shape, out.shape))
         return out
     def birnn(self, all_chords):
         
@@ -130,7 +113,7 @@ class CMHRNN(object):
             else: #during training
                 big_frame_outputs_all_stps, big_frame_last_state = tf.nn.dynamic_rnn(self.big_frame_cell, big_frame_input_chunks, dtype=tf.float32) #batch, no_chunks, dim
 
-            big_frame_outputs_all_upsample = self.weight_bias(big_frame_outputs_all_stps, self.dim*self.big_frame_size//self.frame_size, 'emb_big_frame_proj') #batch, no_chunks, dim*big_size/small_size
+            big_frame_outputs_all_upsample = self.weight_bias(big_frame_outputs_all_stps, self.dim*self.big_frame_size//self.frame_size, 'upsample') #batch, no_chunks, dim*big_size/small_size
             big_frame_outputs = tf.reshape(big_frame_outputs_all_upsample,
                                        [tf.shape(big_frame_outputs_all_upsample)[0],
                                         tf.shape(big_frame_outputs_all_upsample)[1] * self.big_frame_size//self.frame_size,
@@ -146,16 +129,15 @@ class CMHRNN(object):
             
             if bigframe_output is not None:
                 frame_input_chunks = self.weight_bias(frame_input_chunks, self.dim, 'emb_frame_chunks')
-                frame_input_chunks += bigframe_output #batch, no_chunk, dim + batch, no_chunk, dim      
+                frame_input_chunks += bigframe_output #batch, no_chunk, dim     
             
             if frame_state is not None: #during generation
                 frame_outputs_all_stps, frame_last_state = tf.nn.dynamic_rnn(self.frame_cell, frame_input_chunks,initial_state = frame_state, dtype=tf.float32)
             else: #during training
                 frame_outputs_all_stps, frame_last_state = tf.nn.dynamic_rnn(self.frame_cell, frame_input_chunks, dtype=tf.float32)
-            if bigframe_output is not None and if_rs is True:
-                print("hey, residual connection!")
+            if bigframe_output is not None and if_rs is True: #residual connection
                 frame_outputs_all_stps += bigframe_output #batch, no_chunk, dim + batch, no_chunk, dim
-            frame_outputs_all_upsample = self.weight_bias(frame_outputs_all_stps, self.dim*self.frame_size, 'emb_frame_proj')
+            frame_outputs_all_upsample = self.weight_bias(frame_outputs_all_stps, self.dim*self.frame_size, 'upsample2')
             frame_outputs = tf.reshape(frame_outputs_all_upsample,
                                        [tf.shape(frame_outputs_all_upsample)[0],
                                         tf.shape(frame_outputs_all_upsample)[1] * self.frame_size,
@@ -179,35 +161,6 @@ class CMHRNN(object):
             logits = mlp_out+frame_output
         if rm_time is not None:
             logits = tf.concat([logits, rm_time],axis = -1)
-
-        sample_outputs = self.weight_bias(logits, self.piano_dim-self.chord_channel ,"dense_weights_0") 
-        sample_outputs = tf.nn.relu(sample_outputs)
-        sample_outputs = self.weight_bias(logits, self.piano_dim-self.chord_channel ,"dense_weights_1") 
-        sample_outputs = tf.nn.relu(sample_outputs)
-        sample_outputs_logits = self.weight_bias(logits, self.piano_dim-self.chord_channel ,"dense_weights_2")             
-        
-        return sample_outputs_logits  #return (batch, pred_length, piano_dim)
-
-    def sample_level_tweek_last_layer(self, sample_input_sequences, frame_output = None, rm_time=None):
-        
-        sample_filter_shape = [self.frame_size, sample_input_sequences.shape[-1], self.dim]
-        sample_filter = tf.get_variable(
-            "sample_filter",
-            sample_filter_shape,
-            initializer=tf.contrib.layers.xavier_initializer_conv2d()
-        )
-        mlp_out = tf.nn.conv1d(sample_input_sequences,
-                            sample_filter,
-                            stride=1,
-                            padding="VALID",
-                            name="sample_conv") #(batch, seqlen-framesize, dim)
-        if frame_output is not None:
-            #logits = tf.concat([mlp_out, frame_output],axis = -1)
-            logits = mlp_out+frame_output
-        if rm_time is not None:
-            logits = tf.concat([logits, rm_time],axis = -1)
-
-        
                  
         rhythm_logits = self.weight_bias(logits, self.rhythm_channel ,"rhythm_weights1")
         rhythm_logits = tf.nn.relu(rhythm_logits)
@@ -220,6 +173,7 @@ class CMHRNN(object):
         note_logits = self.weight_bias(note_logits, self.note_channel ,"note_weights2")
 
         return rhythm_logits, bar_logits, note_logits  #return (batch, pred_length, piano_dim)
+
     def bln_attn(self, baseline_input, baseline_state = None, if_attn = True):
         if if_attn:
             print("cell choice is attn")
@@ -249,17 +203,6 @@ class CMHRNN(object):
 
         return rhythm_logits, bar_logits, note_logits, baseline_last_state #return (batch, pred_length, piano_dim)
 
-    def _create_network_2t_fc(self, one_t_input):
-        print("####MODEL:BAR...####")
-        sample_input = one_t_input[:,:-1,:]
- 
-        frame_input = one_t_input[:, :-self.frame_size,:] 
-
-        ##frame_level##
-        frame_outputs , final_frame_state = self.frame_level_switch(frame_input)
-        ##sample_level## 
-        sample_logits= self.sample_level(sample_input, frame_output = frame_outputs)
-        return sample_logits
     def _create_network_2t_fc_tweek_last_layer(self, one_t_input):
         print("####MODEL:BAR...####")
         sample_input = one_t_input[:,:-1,:]
@@ -270,28 +213,9 @@ class CMHRNN(object):
         frame_outputs , final_frame_state = self.frame_level_switch(frame_input)
         ##sample_level## 
         #sample_logits= self.sample_level_tweek_last_layer(sample_input, frame_output = frame_outputs)
-        rhythm_logits, bar_logits, note_logits= self.sample_level_tweek_last_layer(sample_input, frame_output = frame_outputs)
+        rhythm_logits, bar_logits, note_logits= self.sample_level(sample_input, frame_output = frame_outputs)
 
         return rhythm_logits, bar_logits, note_logits
-
-    def _create_network_3t_fc(self, two_t_input, if_rs = False):
-        print("3t_fc")
-        #big frame level
-        big_frame_input = two_t_input[:,:-self.big_frame_size,:]  
-
-        big_frame_outputs , final_big_frame_state = self.big_frame_level(big_frame_input)
-
-        #frame level
-        frame_input = two_t_input[:, self.big_frame_size-self.frame_size:-self.frame_size,:]
-
-        frame_outputs , final_frame_state = self.frame_level_switch(frame_input, bigframe_output = big_frame_outputs, if_rs = if_rs)
-
-        ##sample level
-        sample_input = two_t_input[:,self.big_frame_size-self.frame_size:-1,:]
-
-        sample_logits= self.sample_level(sample_input, frame_output = frame_outputs)
-
-        return sample_logits
 
     def _create_network_3t_fc_tweek_last_layer(self, two_t_input, if_rs = False):
         print("3t_fc")
@@ -308,21 +232,9 @@ class CMHRNN(object):
         ##sample level
         sample_input = two_t_input[:,self.big_frame_size-self.frame_size:-1,:]
 
-        rhythm_logits, bar_logits, note_logits= self.sample_level_tweek_last_layer(sample_input, frame_output = frame_outputs)
+        rhythm_logits, bar_logits, note_logits= self.sample_level(sample_input, frame_output = frame_outputs)
 
-        return rhythm_logits, bar_logits, note_logits     
-
-    def _create_network_ad_rm2t_fc(self, one_t_input, rm_tm):
-        sample_input = one_t_input[:,:-1,:] # batch, seq-1, piano_dim
- 
-        frame_input = one_t_input[:, :-self.frame_size,:] #(batch, seq-frame_size, piano_dim)
-        remaining_time_input = rm_tm #(batch, seq-frame_size, piano_dim)
-        print("fram input dim",frame_input)
-        ##frame_level##
-        frame_outputs , final_frame_state = self.frame_level_switch(frame_input)
-        ##sample_level## 
-        sample_logits= self.sample_level(sample_input, frame_output = frame_outputs, rm_time = remaining_time_input)
-        return sample_logits        
+        return rhythm_logits, bar_logits, note_logits         
 
     def _create_network_ad_rm2t_fc_tweek_last_layer(self, one_t_input, rm_tm):
         sample_input = one_t_input[:,:-1,:] # batch, seq-1, piano_dim
@@ -332,31 +244,10 @@ class CMHRNN(object):
         ##frame_level##
         frame_outputs , final_frame_state = self.frame_level_switch(frame_input)
         ##sample_level## 
-        rhythm_logits, bar_logits, note_logits= self.sample_level_tweek_last_layer(sample_input, frame_output = frame_outputs, rm_time = remaining_time_input)
+        rhythm_logits, bar_logits, note_logits= self.sample_level(sample_input, frame_output = frame_outputs, rm_time = remaining_time_input)
 
         #sample_logits= self.sample_level(sample_input, frame_output = frame_outputs, rm_time = remaining_time_input)
         return rhythm_logits, bar_logits, note_logits  
-
-    def _create_network_ad_rm3t_fc(self, two_t_input,rm_tm, if_rs = True):
-        print("_create_network_ad_rm3t_fc")
-        with tf.name_scope('CMHRNN_net'):
-
-            sample_input = two_t_input[:,self.big_frame_size-self.frame_size:-1,:]
-
-            frame_input = two_t_input[:, self.big_frame_size-self.frame_size:-self.frame_size,:] 
-
-            big_frame_input = two_t_input[:,:-self.big_frame_size,:]  
-
-            big_frame_outputs , final_big_frame_state = self.big_frame_level(big_frame_input)
-
-            frame_outputs , final_frame_state = self.frame_level_switch(frame_input, bigframe_output = big_frame_outputs, if_rs = if_rs)
-            #frame_outputs , final_frame_state = self.frame_level(frame_input, bigframe_output = big_frame_outputs)
-
-            remaining_time_input = rm_tm #(batch, seq-frame_size, piano_dim)
-            ##sample_level## 
-            sample_logits= self.sample_level(sample_input, frame_output = frame_outputs, rm_time = remaining_time_input)
-
-            return sample_logits
 
     def _create_network_ad_rm3t_fc_tweek_last_layer(self, two_t_input,rm_tm = None, if_rs = True):
         print("_create_network_ad_rm3t_fc")
@@ -375,10 +266,9 @@ class CMHRNN(object):
 
             remaining_time_input = rm_tm #(batch, seq-frame_size, piano_dim)
             ##sample_level## 
-            rhythm_logits, bar_logits, note_logits= self.sample_level_tweek_last_layer(sample_input, frame_output = frame_outputs, rm_time = remaining_time_input)
+            rhythm_logits, bar_logits, note_logits= self.sample_level(sample_input, frame_output = frame_outputs, rm_time = remaining_time_input)
 
             return rhythm_logits, bar_logits, note_logits
-
 
     def _create_network_bln_attn_fc(self, baseline_input, if_attn = False):
         #bln_outputs_logits,_ = self.bln_attn(baseline_input, if_attn = if_attn)
