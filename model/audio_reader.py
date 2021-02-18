@@ -8,9 +8,8 @@ import tensorflow as tf
 import glob
 import argparse
 #from .lookup_table import rhythm_to_index,decode_rhythm
-#from lookup_table import rhythm_to_index,decode_rhythm
+from lookup_table import rhythm_to_index,decode_rhythm
 class AudioReader(object):
-
     def __init__(self,coord, args, queue_size=16):
         self.audio_dir = args.data_dir
         self.validation_dir = args.val_data_dir
@@ -47,7 +46,6 @@ class AudioReader(object):
         for mid_file in mid_files:
             mid = np.load(mid_file)
             npy_lst.append(mid)
-            #print(mid_file, mid.shape)
         print("encoding........FINISHED!")
         return npy_lst
 
@@ -73,110 +71,7 @@ class AudioReader(object):
 
             out_lst.append(duration_left) #in the end will be [(1,16),(1,16) ]
         output = np.stack(out_lst, axis = 0)
-        return output
-        
-
-    def prepare_each_data(self, audio, sess = None, if_train= True):
-        if not self.if_cond:
-            #audio = audio[:, self.chord_channel:]
-            audio = np.delete(audio,np.s_[self.bar_channel:self.bar_channel+self.chord_channel],axis=1)
-        ##prepare dataset based on mode choice, IF_COND, return X, Y
-
-        if self.mode_choice == "nosamplernn": #x: (framesize, dim), y: (1, dim)
-
-            num_iter = audio.shape[0]-self.frame_size 
-            seq_list_tmp = [] 
-            ground_truth_tmp = []
-            for i in range(num_iter):
-                seq = audio[ i:i+self.frame_size, :]
-                seq_list_tmp.append(seq)  
-                if self.if_cond:
-                    gt = np.delete([audio[ i+self.frame_size, :]],np.s_[self.bar_channel:self.bar_channel+self.chord_channel],axis=1)
-                else:
-                    gt = [audio[ i+self.frame_size, :]]
-                ground_truth_tmp.append(gt)
-            X_y_lst = zip(seq_list_tmp, ground_truth_tmp)
-            if if_train:
-                for X_y in X_y_lst:
-                    sess.run(self.enqueue,feed_dict={self.X: X_y[0], self.Y: X_y[1]})
-            else:
-                return X_y_lst
-        elif self.mode_choice == "bar_note": #x: (len, dim), y: (len-frame-big_frame, dim)
-            seq_list_tmp = [] 
-            ground_truth_tmp = []
-            while len(audio) >= self.seq_len:
-                X = audio[:self.seq_len, :]
-                #y = X[self.big_frame_size+self.frame_size:,:]
-                y = X[self.big_frame_size:,:]
-                if self.if_cond:
-                    gt = np.delete(y,np.s_[self.bar_channel:self.bar_channel+self.chord_channel],axis=1)
-                else:
-                    gt = y
-                seq_list_tmp.append(X)  
-                ground_truth_tmp.append(gt)
-                audio = audio[self.seq_len:, :]
-            X_y_lst = zip(seq_list_tmp, ground_truth_tmp)
-            if if_train:
-                for X_y in X_y_lst:
-                    sess.run(self.enqueue,feed_dict={self.X: X_y[0], self.Y: X_y[1]})
-            else:
-                return X_y_lst
-        elif self.mode_choice == "note": #x: (len, dim), y: (len-frame, dim)
-            seq_list_tmp = [] 
-            ground_truth_tmp = []
-            while len(audio) >= self.seq_len:
-                X = audio[:self.seq_len, :]
-                y = X[self.frame_size:,:]
-                if self.if_cond:
-                    gt = np.delete(y,np.s_[self.bar_channel:self.bar_channel+self.chord_channel],axis=1)
-                else:
-                    gt = y
-                seq_list_tmp.append(X)  
-                ground_truth_tmp.append(gt)
-                audio = audio[self.seq_len:, :]
-            X_y_lst = zip(seq_list_tmp, ground_truth_tmp) #[(X,y), (X,y) ]
-            if if_train:
-                for X_y in X_y_lst:
-                    sess.run(self.enqueue,feed_dict={self.X: X_y[0], self.Y: X_y[1]})  
-            else:
-                return X_y_lst
-        elif self.mode_choice=="ad_rm2t":
-            #make sure data starts with a bar event
-            for i in range(len(audio)):
-                if np.argmax(audio[i][:self.bar_channel])==1:
-                    #print("is bar",audio[i][:self.bar_channel])
-                    trim_index = i
-                    break
-            audio = audio[trim_index:]
-
-            seq_list_tmp = [] 
-            ground_truth_tmp = []
-            rm_tm_tmp = []
-            while len(audio) >= self.seq_len:
-                #make sure X starts with a bar event
-                X = audio[:self.seq_len, :]
-
-                #y is okay, no pre-process needed
-                y = X[self.frame_size:,:]
-                if self.if_cond:
-                    gt = np.delete(y,np.s_[self.bar_channel:self.bar_channel+self.chord_channel],axis=1)
-                else:
-                    gt = y
-                #process remaining time lst
-                
-                rm_time_output = self.find_remaining_time(X, prev_len = self.frame_size) #(len-framesize, rhythm_channel)
-                seq_list_tmp.append(X)  
-                ground_truth_tmp.append(gt)
-                rm_tm_tmp.append(rm_time_output)
-                audio = audio[self.seq_len:, :]
-            X_y_lst = zip(seq_list_tmp, ground_truth_tmp, rm_tm_tmp) #[(X,y,z), (X,y,z) ]
-
-
-            if if_train:
-                for X_y in X_y_lst:
-                    sess.run(self.enqueue,feed_dict={self.X: X_y[0], self.Y: X_y[1], self.rm_tm: X_y[2]})  
-            else:
-                return X_y_lst            
+        return output       
     
     def prepare_all_data(self,audio, all_xy_lst):
         if not self.if_cond:
@@ -215,7 +110,6 @@ class AudioReader(object):
             #make sure data starts with a bar event
             for i in range(len(audio)):
                 if np.argmax(audio[i][:self.bar_channel])==1:
-                    #print("is bar",audio[i][:self.bar_channel])
                     trim_index = i
                     break
             audio = audio[trim_index:]
@@ -338,11 +232,6 @@ class AudioReader(object):
     def thread_main2(self, sess):
         stop = False
         mid_files = glob.glob(self.audio_dir+'/*.npy')
-        """for m in mid_files:
-            try:
-                print("hey,",m,np.load(m).shape)
-            except:
-                print("error at",m)"""
         npy_lst = [(mid_file,np.load(mid_file)) for mid_file in mid_files]
         all_xyz_lst = []
 

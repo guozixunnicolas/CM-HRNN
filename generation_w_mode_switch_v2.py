@@ -6,31 +6,18 @@ os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"]="3"
 import sys
 import time
-from datetime import datetime
 import glob
 
 
 from collections import defaultdict
-import pprint
-#from mido import MidiFile, MidiTrack, Message, MetaMessage
 from midiutil import MIDIFile
-#from chord_labels import parse_chord
-#import matplotlib.pyplot as plt
 from pypianoroll import Multitrack, Track
 
 import numpy as np
 import tensorflow as tf
 
-from tensorflow.python.client import timeline
 from model import CMHRNN
-
-from model import AudioReader
-from model import mu_law_decode
-from model import mu_law_encode
-from model import optimizer_factory
 from model import decode_melody,decode_rhythm, rhythm_to_index,index_to_chord, chord_symbol_to_midi_notes
-
-#from lookup_table import decode_melody, decode_rhythm, index_to_chord, chord_symbol_to_midi_notes, rhythm_to_index
 
 COND_DIRECTORY = './test/test_condition'
 GEN_DIR = './test/generated_result'
@@ -39,7 +26,6 @@ LOGDIR_ROOT= None
 BATCH_SIZE = 1
 NUM_GPU = 1
 
-STIMULUS_SEC = 2
 SEED_LENGTH = 8  #16*n+4
    
 
@@ -125,7 +111,7 @@ class define_placeholder(object):
             self.inpt_lst_dim = net.piano_dim - net.chord_channel
         elif net.mode_choice=="ad_rm2t_fc" or net.mode_choice=="ad_rm3t_fc"or net.mode_choice=="ad_rm3t_fc_rs" or net.mode_choice=="bln_attn_fc" or net.mode_choice=="bln_fc" or net.mode_choice=="2t_fc" or net.mode_choice=="3t_fc":
             self.inpt_lst_dim = net.piano_dim + net.chord_channel
-        self.infe_para['infe_big_frame_state'] = net.big_frame_cell.zero_state(net.batch_size,tf.float32) #pay attention here
+        self.infe_para['infe_big_frame_state'] = net.big_frame_cell.zero_state(net.batch_size,tf.float32)
 
         self.infe_para['infe_big_frame_inp'] = tf.placeholder(tf.float32, name = "infe_big_frame_inp",shape = [net.batch_size,net.big_frame_size,self.inpt_lst_dim])
 
@@ -137,7 +123,7 @@ class define_placeholder(object):
 
         self.infe_para['infe_frame_outp'] = tf.placeholder(tf.float32, name = "infe_frame_outp",shape = [net.batch_size,net.frame_size,net.dim])
         
-        self.infe_para['infe_frame_state'] = net.frame_cell.zero_state(net.batch_size,tf.float32) #pay attention here
+        self.infe_para['infe_frame_state'] = net.frame_cell.zero_state(net.batch_size,tf.float32) 
 
         self.infe_para['infe_sample_inp'] = tf.placeholder(tf.float32, name = "infe_sample_inp",shape = [net.batch_size,net.frame_size,self.inpt_lst_dim])
         
@@ -162,7 +148,6 @@ def choose_from_distribution(preds, temperature=1.0):
     exp_preds = np.exp(preds)
     preds = exp_preds / np.sum(exp_preds)
     probas = np.random.multinomial(1, preds, 1)
-    #np.save("debug.npy",preds)
     return_array[:,np.argmax(probas)] = 1
     return return_array
 
@@ -177,22 +162,6 @@ def decode_event_slice(event_slice, net, ignore_bar_event = True):
     melody = decode_melody(melody_info, ignore_bar_event)
     rhythm = decode_rhythm(rhythm_info, ignore_bar_event)  
     chord = index_to_chord(chord_info, ignore_bar_event)    
-    """if net.if_cond:
-        rhythm_info = np.argmax(event_slice[CHORD_CHANNELS_REST:CHORD_CHANNELS_REST+RHYTHMS_CHANNELS])
-        melody_info = np.argmax(event_slice[CHORD_CHANNELS_REST+RHYTHMS_CHANNELS:])
-        chord_info = np.argmax(event_slice[:CHORD_CHANNELS_REST])
-    
-        melody = decode_melody(melody_info, ignore_bar_event)
-        rhythm = decode_rhythm(rhythm_info, ignore_bar_event)  
-        chord = index_to_chord(chord_info, ignore_bar_event)    
-    else:
-        rhythm_info = np.argmax(event_slice[:RHYTHMS_CHANNELS])
-        melody_info = np.argmax(event_slice[RHYTHMS_CHANNELS:])  
-
-        melody = decode_melody(melody_info, ignore_bar_event)
-        rhythm = decode_rhythm(rhythm_info, ignore_bar_event) 
-        chord = "model uncond"
-    """
 
     return melody, rhythm, chord
 def check_if_start_bar(bar_info_at_pos):
@@ -208,7 +177,7 @@ def generate_midi(np_file, mid_name, net ,original_file,if_save = True):
     if not net.if_cond:
         np_f = np.concatenate((original_file[0][:,net.bar_channel:net.bar_channel+net.chord_channel], np_f), axis = -1)
     MyMIDI = MIDIFile(numTracks=2,ticks_per_quarternote=220) #track0 is melody, track1 is chord
-    MyMIDI_eva = MIDIFile(numTracks=1,ticks_per_quarternote=220) #track0 is melody, track1 is chord
+    MyMIDI_eva = MIDIFile(numTracks=1,ticks_per_quarternote=220) #track0 is melody
 
     cum_time = float(0)
     ##melody track: melody + rhythm
@@ -233,9 +202,7 @@ def generate_midi(np_file, mid_name, net ,original_file,if_save = True):
             dur = rhythm
             if melody==0:
                 cum_time = on_time+rhythm
-                #print("encounter rest for ",rhythm)
             else:
-                #print("add note:{}, on time:{}, duration:{}".format(melody,on_time, dur))
                 MyMIDI.addNote(track = 0, channel = 0, pitch = melody, time = on_time, duration = dur, volume = 100)
                 MyMIDI_eva.addNote(track = 0, channel = 0, pitch = melody, time = on_time, duration = dur, volume = 100)
                 cum_time = on_time+rhythm
@@ -246,9 +213,7 @@ def generate_midi(np_file, mid_name, net ,original_file,if_save = True):
     for pos, event_slice in enumerate(np_f):
 
         _, rhythm, chord = decode_event_slice(event_slice, net,ignore_bar_event = True)
-        #print("raw info, chord and rhythm",chord, rhythm)
         if pos in ignore_pos:
-            #print("ignore")
             continue
 
         next_pos = pos + 1 
@@ -265,19 +230,15 @@ def generate_midi(np_file, mid_name, net ,original_file,if_save = True):
                 next_pos+=1
                 try:
                     _, rhythm_next, chord_next = decode_event_slice(np_f[next_pos],net,ignore_bar_event = True)
-                    #if_next_bar = check_if_start_bar(bar_info[next_pos])
                 except:
                     rhythm_next = "break the loop"
                     chord_next = "break the loop"
-                    #if_next_bar = True
             on_time = cum_time
             dur = rhythm
             if chord==("rest","rest"):
                 cum_time = on_time+rhythm
-                #print("encounter rest for ",rhythm)
             else:
                 chord_notes = chord_symbol_to_midi_notes(chord)
-                #print(chord, chord_notes)
                 for chord_note in chord_notes:
                     chord_note = int(chord_note)
                     chord_note+=60
@@ -306,17 +267,6 @@ def create_graph_2t_fc(net):
                 frame_state = infe_para['infe_frame_state']
         )
 
-        """sample_out = net.sample_level(
-            frame_output=infe_para['infe_frame_outp_slices'],
-            sample_input_sequences=infe_para['infe_sample_inp']
-        )
-        sample_out = tf.reshape(
-            sample_out,
-            [-1, net.piano_dim -net.chord_channel]
-        )
-        infe_para['note'] = tf.nn.softmax(sample_out[:, net.bar_channel+net.rhythm_channel:])
-        infe_para['rhythm'] = tf.nn.softmax(sample_out[:, net.bar_channel:net.bar_channel+net.rhythm_channel])
-        infe_para['bar'] = tf.nn.softmax(sample_out[:, :net.bar_channel])"""
         pd_sustain, pd_bar, pd_note = net.sample_level_tweek_last_layer(
             frame_output=infe_para['infe_frame_outp_slices'],
             sample_input_sequences=infe_para['infe_sample_inp']
@@ -344,17 +294,6 @@ def create_graph_3t_fc(net):
                 frame_state = infe_para['infe_frame_state']
         )
 
-        """sample_out = net.sample_level(
-            frame_output=infe_para['infe_frame_outp_slices'],
-            sample_input_sequences=infe_para['infe_sample_inp']
-        )
-        sample_out = tf.reshape(
-            sample_out,
-            [-1, net.piano_dim -net.chord_channel]
-        )
-        infe_para['note'] = tf.nn.softmax(sample_out[:, net.bar_channel+net.rhythm_channel:])
-        infe_para['rhythm'] = tf.nn.softmax(sample_out[:, net.bar_channel:net.bar_channel+net.rhythm_channel])
-        infe_para['bar'] = tf.nn.softmax(sample_out[:, :net.bar_channel])"""
         pd_sustain, pd_bar, pd_note = net.sample_level_tweek_last_layer(
             frame_output=infe_para['infe_frame_outp_slices'],
             sample_input_sequences=infe_para['infe_sample_inp']
@@ -376,18 +315,6 @@ def create_graph_ad_rm2t_fc(net):
                 frame_state = infe_para['infe_frame_state']
         )
 
-        """sample_out = net.sample_level(
-            frame_output=infe_para['infe_frame_outp_slices'],
-            sample_input_sequences=infe_para['infe_sample_inp'],
-            rm_time=infe_para['infe_rm_tm']
-        )
-        sample_out = tf.reshape(
-            sample_out,
-            [-1, net.piano_dim -net.chord_channel]
-        )
-        infe_para['note'] = tf.nn.softmax(sample_out[:, net.bar_channel+net.rhythm_channel:])
-        infe_para['rhythm'] = tf.nn.softmax(sample_out[:, net.bar_channel:net.bar_channel+net.rhythm_channel])
-        infe_para['bar'] = tf.nn.softmax(sample_out[:, :net.bar_channel])"""
         pd_sustain, pd_bar, pd_note = net.sample_level_tweek_last_layer(
             frame_output=infe_para['infe_frame_outp_slices'],
             sample_input_sequences=infe_para['infe_sample_inp'],
@@ -404,18 +331,7 @@ def create_graph_bln_attn_fc(net, if_attn):
         infe_para = define_placeholder(net).infe_para
 
         tf.get_variable_scope().reuse_variables()
-        """if if_attn:
-            sample_out, infe_para['bln_next_state'] = net.bln_attn(baseline_input = infe_para['bln_ipt'], baseline_state = infe_para['bln_attn_state'], if_attn = if_attn)
-        else:
-            sample_out, infe_para['bln_next_state'] = net.bln_attn(baseline_input = infe_para['bln_ipt'], baseline_state = infe_para['bln_state'], if_attn = if_attn)
 
-        sample_out = tf.reshape(
-            sample_out,
-            [-1, net.piano_dim -net.chord_channel]
-        )
-        infe_para['note'] = tf.nn.softmax(sample_out[:, net.bar_channel+net.rhythm_channel:])
-        infe_para['rhythm'] = tf.nn.softmax(sample_out[:, net.bar_channel:net.bar_channel+net.rhythm_channel])
-        infe_para['bar'] = tf.nn.softmax(sample_out[:, :net.bar_channel])"""
         if if_attn:
             pd_sustain, pd_bar, pd_note, infe_para['bln_next_state'] = net.bln_attn(baseline_input = infe_para['bln_ipt'], baseline_state = infe_para['bln_attn_state'], if_attn = if_attn)
         else:
@@ -447,19 +363,6 @@ def create_graph_ad_rm3t_fc(net, if_residual):
                 if_rs = if_residual
         )
 
-        """sample_out = net.sample_level(
-            frame_output=infe_para['infe_frame_outp_slices'],
-            sample_input_sequences=infe_para['infe_sample_inp'],
-            rm_time=infe_para['infe_rm_tm']
-        )
-        sample_out = tf.reshape(
-            sample_out,
-            [-1, net.piano_dim -net.chord_channel]
-        )
-        infe_para['note'] = tf.nn.softmax(sample_out[:, net.bar_channel+net.rhythm_channel:])
-        infe_para['rhythm'] = tf.nn.softmax(sample_out[:, net.bar_channel:net.bar_channel+net.rhythm_channel])
-        infe_para['bar'] = tf.nn.softmax(sample_out[:, :net.bar_channel])"""
-
         pd_sustain, pd_bar, pd_note = net.sample_level_tweek_last_layer(
             frame_output=infe_para['infe_frame_outp_slices'],
             sample_input_sequences=infe_para['infe_sample_inp'],
@@ -484,7 +387,6 @@ def find_rm_tm_array(net, samples,current_time):
         duration_raw = np.argmax(samples[0][idx][net.bar_channel+2*net.chord_channel: net.bar_channel+2*net.chord_channel+net.rhythm_channel])
         duration = decode_rhythm(duration_raw,ignore_bar_event = True)
         duration_accumulated+=duration
-    #print("dur accumulated",duration_accumulated)
     duration_left_raw = duration_accumulated
     if duration_left_raw>4:
         print("dur warning",duration_accumulated)
@@ -690,7 +592,7 @@ def main():
     args, mod_arg= get_arguments()
 
     #print(args_model)
-    net = SampleRnnModel_w_mode_switch(args = mod_arg, if_train = False)
+    net = CMHRNN(args = mod_arg, if_train = False)
 
     if mod_arg.if_cond == "cond":
         network_input_plder= tf.placeholder(tf.float32,shape =(None, mod_arg.seq_len, mod_arg.piano_dim+mod_arg.chord_channel), name = "input_batch_rnn")
@@ -722,7 +624,7 @@ def main():
                 (   gt,
                     pd,
                     loss
-                )=net.loss_SampleRnn(
+                )=net.loss_CMHRNN(
                     X = network_input_plder,
                     y = network_output_plder
                 )
@@ -730,7 +632,7 @@ def main():
                 (   gt,
                     pd,
                     loss
-                )=net.loss_SampleRnn(
+                )=net.loss_CMHRNN(
                     X = network_input_plder,
                     y = network_output_plder,
                     rm_time= rm_time_plder

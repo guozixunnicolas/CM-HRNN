@@ -212,7 +212,6 @@ class CMHRNN(object):
         ##frame_level##
         frame_outputs , final_frame_state = self.frame_level_switch(frame_input)
         ##sample_level## 
-        #sample_logits= self.sample_level_tweek_last_layer(sample_input, frame_output = frame_outputs)
         rhythm_logits, bar_logits, note_logits= self.sample_level(sample_input, frame_output = frame_outputs)
 
         return rhythm_logits, bar_logits, note_logits
@@ -245,8 +244,6 @@ class CMHRNN(object):
         frame_outputs , final_frame_state = self.frame_level_switch(frame_input)
         ##sample_level## 
         rhythm_logits, bar_logits, note_logits= self.sample_level(sample_input, frame_output = frame_outputs, rm_time = remaining_time_input)
-
-        #sample_logits= self.sample_level(sample_input, frame_output = frame_outputs, rm_time = remaining_time_input)
         return rhythm_logits, bar_logits, note_logits  
 
     def _create_network_ad_rm3t_fc_tweek_last_layer(self, two_t_input,rm_tm = None, if_rs = True):
@@ -262,7 +259,6 @@ class CMHRNN(object):
             big_frame_outputs , final_big_frame_state = self.big_frame_level(big_frame_input)
 
             frame_outputs , final_frame_state = self.frame_level_switch(frame_input, bigframe_output = big_frame_outputs, if_rs = if_rs)
-            #frame_outputs , final_frame_state = self.frame_level(frame_input, bigframe_output = big_frame_outputs)
 
             remaining_time_input = rm_tm #(batch, seq-frame_size, piano_dim)
             ##sample_level## 
@@ -271,71 +267,38 @@ class CMHRNN(object):
             return rhythm_logits, bar_logits, note_logits
 
     def _create_network_bln_attn_fc(self, baseline_input, if_attn = False):
-        #bln_outputs_logits,_ = self.bln_attn(baseline_input, if_attn = if_attn)
-        #return bln_outputs_logits
         rhythm_logits, bar_logits, note_logits,_ = self.bln_attn(baseline_input, if_attn = if_attn)
         return rhythm_logits, bar_logits, note_logits
 
     def loss_CMHRNN(self, X,y, rm_time = None,l2_regularization_strength=None, name='sample'):
-        """ barnote: X(batch, seq_len, dim), Y:(batch, seq_len-frame-big_frame, dim)
-            note: X(batch, seq_len, dim), Y:(batch, seq_len-frame, dim)
-
-            #dim here is 211 for cond, 211-49 for no_cond
-        """
+        
         self.X = X
         self.y = y
         self.rm_time = rm_time
 
         with tf.name_scope(name):
-            if self.mode_choice=="ad_rm2t_fc":  
-                #pred_logits= self._create_network_ad_rm2t_fc(one_t_input = self.X, rm_tm = self.rm_time) #(batch* seq_len-frame, self.note + self.rhythm)
-                #pd = pred_logits 
+            if self.mode_choice=="ad_rm2t_fc":  #2 tier with acc time
                 pd_sustain, pd_bar, pd_note = self._create_network_ad_rm2t_fc_tweek_last_layer(one_t_input = self.X, rm_tm = self.rm_time) #(batch* seq_len-frame, self.note + self.rhythm)
                 pd = tf.concat([pd_bar, pd_sustain, pd_note],axis = -1)
-            elif self.mode_choice=="ad_rm3t_fc":  
-                #pred_logits= self._create_network_ad_rm3t_fc(two_t_input = self.X, rm_tm = self.rm_time, if_rs = False) #(batch* seq_len-frame, self.note + self.rhythm)
-                #pd = pred_logits  
+            elif self.mode_choice=="ad_rm3t_fc":  #3 tier with acc time
                 pd_sustain, pd_bar, pd_note = self._create_network_ad_rm3t_fc_tweek_last_layer(two_t_input = self.X, rm_tm = self.rm_time, if_rs = False) #(batch* seq_len-frame, self.note + self.rhythm)
                 pd = tf.concat([pd_bar, pd_sustain, pd_note],axis = -1)               
-            elif self.mode_choice=="ad_rm3t_fc_rs":  
-                #pred_logits= self._create_network_ad_rm3t_fc(two_t_input = self.X, rm_tm = self.rm_time, if_rs = True) #(batch* seq_len-frame, self.note + self.rhythm)
-                #pd = pred_logits  
+            elif self.mode_choice=="ad_rm3t_fc_rs":  #3 tier with acc time with residual conn.
                 pd_sustain, pd_bar, pd_note = self._create_network_ad_rm3t_fc_tweek_last_layer(two_t_input = self.X, rm_tm = self.rm_time, if_rs = True) #(batch* seq_len-frame, self.note + self.rhythm)
                 pd = tf.concat([pd_bar, pd_sustain, pd_note],axis = -1)
-            elif self.mode_choice=="bln_attn_fc":  
-                #pred_logits= self._create_network_bln_attn_fc(baseline_input = self.X, if_attn = True) #(batch* seq_len-frame, self.note + self.rhythm)
-                #pd = pred_logits       
+            elif self.mode_choice=="bln_attn_fc":   #attention baseline
                 pd_sustain, pd_bar, pd_note= self._create_network_bln_attn_fc(baseline_input = self.X, if_attn = True) #(batch* seq_len-frame, self.note + self.rhythm)
                 pd = tf.concat([pd_bar, pd_sustain, pd_note],axis = -1)
-            elif self.mode_choice=="bln_fc":  
-                pred_logits= self._create_network_bln_attn_fc(baseline_input = self.X, if_attn = False) #(batch* seq_len-frame, self.note + self.rhythm)
-                pd = pred_logits      
-            elif self.mode_choice=="2t_fc":  
-                #pred_logits= self._create_network_2t_fc(one_t_input = self.X) #(batch* seq_len-frame, self.note + self.rhythm)
-                #pd = pred_logits  
+            elif self.mode_choice=="bln_fc":  #vanilla rnn
+                pd_sustain, pd_bar, pd_note= self._create_network_bln_attn_fc(baseline_input = self.X, if_attn = False) #(batch* seq_len-frame, self.note + self.rhythm)
+                pd = tf.concat([pd_bar, pd_sustain, pd_note],axis = -1)     
+            elif self.mode_choice=="2t_fc":  #2 tier no acc time
                 pd_sustain, pd_bar, pd_note = self._create_network_2t_fc_tweek_last_layer(one_t_input = self.X) #(batch* seq_len-frame, self.note + self.rhythm)
                 pd = tf.concat([pd_bar, pd_sustain, pd_note],axis = -1)           
-            elif self.mode_choice=="3t_fc":  
-                #pred_logits= self._create_network_3t_fc(two_t_input = self.X) #(batch* seq_len-frame, self.note + self.rhythm)
-                #pd = pred_logits 
+            elif self.mode_choice=="3t_fc":  #3 tier no acc time
                 pd_sustain, pd_bar, pd_note = self._create_network_3t_fc_tweek_last_layer(two_t_input = self.X, if_rs = True) #(batch* seq_len-frame, self.note + self.rhythm)
                 pd = tf.concat([pd_bar, pd_sustain, pd_note],axis = -1)                                          
-            """gt_bar = self.y[:, :, :self.bar_channel]
-            gt_sustain = self.y[:, :, self.bar_channel : self.bar_channel+self.rhythm_channel]
-            gt_note = self.y[:,:, self.bar_channel+self.rhythm_channel:]
 
-            pd_bar = pd[:, :, :self.bar_channel]
-            pd_note = pd[:,:, self.bar_channel+self.rhythm_channel:]
-            pd_sustain = pd[:, :, self.bar_channel : self.bar_channel+self.rhythm_channel]
-
-            gt_note = tf.reshape(gt_note, [-1, self.note_channel])
-            pd_note = tf.reshape(pd_note, [-1, self.note_channel])
-
-            gt_sustain = tf.reshape(gt_sustain, [-1, self.rhythm_channel])
-            pd_sustain = tf.reshape(pd_sustain, [-1, self.rhythm_channel])
-
-            gt_bar = tf.reshape(gt_bar, [-1, self.bar_channel])
-            pd_bar = tf.reshape(pd_bar, [-1, self.bar_channel])"""
             gt_bar = self.y[:, :, :self.bar_channel]
             gt_bar = tf.reshape(gt_bar, [-1, self.bar_channel])
             gt_sustain = self.y[:, :, self.bar_channel : self.bar_channel+self.rhythm_channel]
